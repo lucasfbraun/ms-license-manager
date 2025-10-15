@@ -712,6 +712,46 @@ HTML_TEMPLATE = '''
         .table-hover tbody tr:hover {
             background-color: rgba(96, 147, 105, 0.1) !important;
         }
+
+        /* Chips (Filtros rápidos) usando a paleta */
+        #chips-empresa .btn,
+        #chips-setor .btn,
+        #chips-estado .btn {
+            border-radius: 999px;
+            padding: 4px 10px;
+            font-weight: 600;
+        }
+
+        /* Estado inativo (outline) no escopo dos chips */
+        #chips-empresa .btn-outline-primary,
+        #chips-setor .btn-outline-primary,
+        #chips-estado .btn-outline-primary {
+            color: var(--primary) !important;
+            border-color: var(--primary) !important;
+            background-color: #FFFFFF !important;
+        }
+        #chips-empresa .btn-outline-primary:hover,
+        #chips-setor .btn-outline-primary:hover,
+        #chips-estado .btn-outline-primary:hover {
+            color: #FFFFFF !important;
+            background-color: var(--primary) !important;
+            border-color: var(--primary) !important;
+        }
+
+        /* Ativo (filled) no escopo dos chips */
+        #chips-empresa .btn-primary,
+        #chips-setor .btn-primary,
+        #chips-estado .btn-primary {
+            color: #FFFFFF !important;
+            background-color: var(--primary) !important;
+            border-color: var(--primary) !important;
+            box-shadow: 0 2px 6px rgba(96, 147, 105, 0.3);
+        }
+        #chips-empresa .btn-primary:hover,
+        #chips-setor .btn-primary:hover,
+        #chips-estado .btn-primary:hover {
+            filter: brightness(0.95);
+        }
     </style>
 </head>
 <body>
