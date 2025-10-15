@@ -79,12 +79,12 @@ def create_graphs(filters=None):
     fig1 = px.bar(x=gastos_empresa.values, y=gastos_empresa.index, orientation='h',
                   labels={'x': 'Gasto Total (R$)', 'y': 'Empresa'},
                   title='💼 Top 15 Empresas por Gasto')
-    fig1.update_traces(marker_color='#4285F4')  # accent1
+    fig1.update_traces(marker_color='#609369')
     fig1.update_layout(
         plot_bgcolor='#FFFFFF',
         paper_bgcolor='#FFFFFF',
-        font=dict(color='#595959', family='Roboto, sans-serif'),
-        title_font=dict(size=18, color='#212121')
+        font=dict(color='#333333', family='Cairo, sans-serif'),
+        title_font=dict(size=18, color='#333333', family='Cairo')
     )
     graphs['empresas'] = fig1.to_html(full_html=False, div_id="graph1")
     
@@ -92,12 +92,12 @@ def create_graphs(filters=None):
     estado_counts = df.groupby('estado')['total'].sum()
     fig2 = px.pie(values=estado_counts.values, names=estado_counts.index,
                   title='🗺️ Distribuição por Estado', hole=0.4,
-                  color_discrete_sequence=['#4285F4', '#0097A7', '#78909C', '#EEFF41', '#212121', '#EEEEEE'])
+                  color_discrete_sequence=['#609369', '#026B69', '#7FB88A', '#014847', '#EEFF41', '#EEEEEE'])
     fig2.update_layout(
         plot_bgcolor='#FFFFFF',
         paper_bgcolor='#FFFFFF',
-        font=dict(color='#595959', family='Roboto, sans-serif'),
-        title_font=dict(size=18, color='#212121')
+        font=dict(color='#333333', family='Cairo, sans-serif'),
+        title_font=dict(size=18, color='#333333', family='Cairo')
     )
     graphs['estados'] = fig2.to_html(full_html=False, div_id="graph2")
     
@@ -106,13 +106,13 @@ def create_graphs(filters=None):
     fig3 = px.bar(x=centro_custo.index, y=centro_custo.values,
                   labels={'x': 'Centro de Custo', 'y': 'Gasto Total (R$)'},
                   title='🏦 Top 10 Centros de Custo (Maior Gasto)')
-    fig3.update_traces(marker_color='#0097A7')  # accent5
+    fig3.update_traces(marker_color='#026B69')
     fig3.update_layout(
         xaxis_tickangle=-45,
         plot_bgcolor='#FFFFFF',
         paper_bgcolor='#FFFFFF',
-        font=dict(color='#595959', family='Roboto, sans-serif'),
-        title_font=dict(size=18, color='#212121')
+        font=dict(color='#333333', family='Cairo, sans-serif'),
+        title_font=dict(size=18, color='#333333', family='Cairo')
     )
     graphs['centro_custo'] = fig3.to_html(full_html=False, div_id="graph3")
     
@@ -121,12 +121,12 @@ def create_graphs(filters=None):
     fig4 = px.bar(x=licencas_count.values, y=licencas_count.index, orientation='h',
                   labels={'x': 'Quantidade', 'y': 'Tipo de Licença'},
                   title='📊 Top 10 Licenças Mais Usadas')
-    fig4.update_traces(marker_color='#78909C')  # accent3
+    fig4.update_traces(marker_color='#7FB88A')
     fig4.update_layout(
         plot_bgcolor='#FFFFFF',
         paper_bgcolor='#FFFFFF',
-        font=dict(color='#595959', family='Roboto, sans-serif'),
-        title_font=dict(size=18, color='#212121')
+        font=dict(color='#333333', family='Cairo, sans-serif'),
+        title_font=dict(size=18, color='#333333', family='Cairo')
     )
     graphs['licencas'] = fig4.to_html(full_html=False, div_id="graph4")
     
@@ -134,12 +134,12 @@ def create_graphs(filters=None):
     modalidade = df.groupby('Modalidade da licença')['total'].sum()
     fig5 = px.pie(values=modalidade.values, names=modalidade.index,
                   title='💳 Gastos por Modalidade de Licença', hole=0.3,
-                  color_discrete_sequence=['#4285F4', '#0097A7', '#EEFF41', '#78909C', '#212121'])
+                  color_discrete_sequence=['#609369', '#026B69', '#7FB88A', '#014847', '#EEFF41'])
     fig5.update_layout(
         plot_bgcolor='#FFFFFF',
         paper_bgcolor='#FFFFFF',
-        font=dict(color='#595959', family='Roboto, sans-serif'),
-        title_font=dict(size=18, color='#212121')
+        font=dict(color='#333333', family='Cairo, sans-serif'),
+        title_font=dict(size=18, color='#333333', family='Cairo')
     )
     graphs['modalidade'] = fig5.to_html(full_html=False, div_id="graph5")
     
@@ -148,12 +148,12 @@ def create_graphs(filters=None):
     fig6 = px.bar(x=setor.values, y=setor.index, orientation='h',
                   labels={'x': 'Gasto Total (R$)', 'y': 'Setor'},
                   title='🏢 Top 15 Setores por Gasto')
-    fig6.update_traces(marker_color='#EEFF41')  # accent6 - Verde Neon
+    fig6.update_traces(marker_color='#609369')
     fig6.update_layout(
         plot_bgcolor='#FFFFFF',
         paper_bgcolor='#FFFFFF',
-        font=dict(color='#595959', family='Roboto, sans-serif'),
-        title_font=dict(size=18, color='#212121')
+        font=dict(color='#333333', family='Cairo, sans-serif'),
+        title_font=dict(size=18, color='#333333', family='Cairo')
     )
     graphs['setor'] = fig6.to_html(full_html=False, div_id="graph6")
     
@@ -162,12 +162,12 @@ def create_graphs(filters=None):
     if len(faturador) > 0:
         fig7 = px.pie(values=faturador.values, names=faturador.index,
                       title='🔄 Distribuição por Fornecedor (Faturador)',
-                      color_discrete_sequence=['#4285F4', '#0097A7', '#78909C', '#EEFF41', '#212121', '#EEEEEE'])
+                      color_discrete_sequence=['#609369', '#026B69', '#7FB88A', '#014847', '#EEFF41', '#EEEEEE'])
         fig7.update_layout(
             plot_bgcolor='#FFFFFF',
             paper_bgcolor='#FFFFFF',
-            font=dict(color='#595959', family='Roboto, sans-serif'),
-            title_font=dict(size=18, color='#212121')
+            font=dict(color='#333333', family='Cairo, sans-serif'),
+            title_font=dict(size=18, color='#333333', family='Cairo')
         )
         graphs['faturador'] = fig7.to_html(full_html=False, div_id="graph7")
     else:
@@ -294,36 +294,33 @@ HTML_TEMPLATE = '''
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700&display=swap');
+        
         :root {
-            /* Paleta de Cores Material Design */
-            --dk1: #000000;
-            --lt1: #FFFFFF;
-            --dk2: #595959;
-            --lt2: #EEEEEE;
-            --accent1: #4285F4;
-            --accent2: #212121;
-            --accent3: #78909C;
-            --accent4: #FFAB40;
-            --accent5: #0097A7;
-            --accent6: #EEFF41;
-            --hlink: #0097A7;
-            --folHlink: #0097A7;
+            /* Nova Paleta de Cores */
+            --primary: #609369;
+            --card-bg: #026B69;
+            --page-bg: #013938;
+            --title-color: #EEEEEE;
+            --body-color: #FFFFFF;
+            --accent-light: #7FB88A;
+            --accent-dark: #014847;
         }
         
         body {
-            background-color: #FAFAFA;
-            font-family: 'Roboto', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            color: var(--dk2);
+            background-color: var(--page-bg);
+            font-family: 'Cairo', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: var(--body-color);
             line-height: 1.6;
         }
         
         .dashboard-header {
-            background: linear-gradient(135deg, var(--accent1) 0%, var(--accent5) 100%);
-            color: var(--lt1);
+            background: linear-gradient(135deg, var(--card-bg) 0%, var(--primary) 100%);
+            color: var(--body-color);
             padding: 50px;
             border-radius: 0;
             margin-bottom: 40px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
             position: relative;
         }
         
@@ -344,88 +341,102 @@ HTML_TEMPLATE = '''
         }
         
         .dashboard-header h1 {
+            font-family: 'Cairo', sans-serif;
             font-weight: 700;
             margin-bottom: 12px;
             font-size: 2.5rem;
             letter-spacing: -0.5px;
             margin-left: 150px;
+            color: var(--title-color);
         }
         
         .dashboard-header p {
+            font-family: 'Cairo', sans-serif;
             font-size: 1.2rem;
             opacity: 0.95;
-            font-weight: 300;
+            font-weight: 500;
             margin-left: 150px;
+            color: var(--body-color);
         }
         
         .dashboard-header small {
             opacity: 0.85;
             font-size: 0.9rem;
             margin-left: 150px;
+            color: var(--body-color);
         }
         
         .kpi-card {
             border-radius: 8px;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
             transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
             margin-bottom: 24px;
             border: none;
             overflow: hidden;
+            background: #FFFFFF;
         }
         
         .kpi-card:hover {
             transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
         }
         
         .kpi-card.bg-success {
-            background: linear-gradient(135deg, var(--accent5) 0%, #007c8a 100%) !important;
+            background: linear-gradient(135deg, var(--primary) 0%, #7FB88A 100%) !important;
+            color: #FFFFFF;
         }
         
         .kpi-card.bg-primary {
-            background: linear-gradient(135deg, var(--accent1) 0%, #3367d6 100%) !important;
+            background: linear-gradient(135deg, var(--card-bg) 0%, #038280 100%) !important;
+            color: #FFFFFF;
         }
         
         .kpi-card.bg-info {
-            background: linear-gradient(135deg, var(--accent3) 0%, #607D8B 100%) !important;
+            background: linear-gradient(135deg, #014847 0%, var(--card-bg) 100%) !important;
+            color: #FFFFFF;
         }
         
         .kpi-card.bg-warning {
-            background: linear-gradient(135deg, #EEFF41 0%, #C6FF00 100%) !important;
-            color: #000000 !important;
+            background: linear-gradient(135deg, var(--primary) 0%, #7FB88A 100%) !important;
+            color: #FFFFFF !important;
         }
         
         .kpi-card .card-body h6 {
-            font-weight: 600;
+            font-family: 'Cairo', sans-serif;
+            font-weight: 700;
             font-size: 0.85rem;
             text-transform: uppercase;
             letter-spacing: 1.2px;
             opacity: 0.9;
+            color: #FFFFFF;
         }
         
         .kpi-card .card-body h2 {
+            font-family: 'Cairo', sans-serif;
             font-weight: 700;
             font-size: 2.8rem;
             margin: 18px 0;
             letter-spacing: -1px;
+            color: #FFFFFF;
         }
         
         .kpi-card .card-body small {
             opacity: 0.85;
             font-size: 0.85rem;
+            color: #FFFFFF;
         }
         
         .card-custom {
             border-radius: 8px;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
             margin-bottom: 28px;
             border: none;
-            background: var(--lt1);
+            background: #FFFFFF;
             transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
         }
         
         .card-custom:hover {
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
             transform: translateY(-2px);
         }
         
@@ -434,31 +445,34 @@ HTML_TEMPLATE = '''
         }
         
         .card-custom h5 {
-            color: var(--accent1);
+            font-family: 'Cairo', sans-serif;
+            color: var(--primary);
             font-weight: 700;
             margin-bottom: 24px;
             font-size: 1.3rem;
         }
         
         .filter-section {
-            background: var(--lt1);
+            background: #FFFFFF;
             padding: 28px;
             border-radius: 8px;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
             margin-bottom: 30px;
-            border-top: 3px solid var(--accent1);
+            border-top: 3px solid var(--primary);
         }
         
         .filter-section h5 {
-            color: var(--accent1);
+            font-family: 'Cairo', sans-serif;
+            color: var(--primary);
             font-weight: 700;
             margin-bottom: 24px;
             font-size: 1.2rem;
         }
         
         .filter-label {
+            font-family: 'Cairo', sans-serif;
             font-weight: 600;
-            color: var(--accent5);
+            color: #333333;
             margin-bottom: 8px;
             font-size: 0.9rem;
             text-transform: uppercase;
@@ -466,61 +480,64 @@ HTML_TEMPLATE = '''
         }
         
         .form-select {
-            border: 1px solid #E0E0E0;
+            border: 1px solid #DDDDDD;
             border-radius: 6px;
             padding: 10px 14px;
             transition: all 0.3s;
-            background-color: var(--lt1);
-            color: var(--dk2);
+            background-color: #FAFAFA;
+            color: #333333;
         }
         
         .form-select:focus {
-            border-color: var(--accent1);
-            box-shadow: 0 0 0 0.25rem rgba(66, 133, 244, 0.15);
+            border-color: var(--primary);
+            box-shadow: 0 0 0 0.25rem rgba(96, 147, 105, 0.2);
             outline: none;
         }
         
         .btn-filter {
-            background: linear-gradient(135deg, var(--accent1) 0%, var(--accent5) 100%);
+            font-family: 'Cairo', sans-serif;
+            background: linear-gradient(135deg, var(--primary) 0%, #7FB88A 100%);
             border: none;
             padding: 12px 32px;
-            font-weight: 600;
+            font-weight: 700;
             border-radius: 6px;
             transition: all 0.2s;
-            color: var(--lt1);
+            color: var(--body-color);
             text-transform: uppercase;
             letter-spacing: 0.5px;
             font-size: 0.9rem;
         }
         
         .btn-filter:hover {
-            background: linear-gradient(135deg, var(--accent5) 0%, var(--accent1) 100%);
+            background: linear-gradient(135deg, #7FB88A 0%, var(--primary) 100%);
             transform: translateY(-1px);
-            box-shadow: 0 2px 8px rgba(66, 133, 244, 0.25);
+            box-shadow: 0 4px 12px rgba(96, 147, 105, 0.4);
         }
         
         .btn-clear {
-            background: var(--dk2);
-            border: none;
+            font-family: 'Cairo', sans-serif;
+            background: var(--accent-dark);
+            border: 1px solid var(--primary);
             padding: 12px 32px;
-            font-weight: 600;
+            font-weight: 700;
             border-radius: 6px;
             transition: all 0.2s;
-            color: var(--lt1);
+            color: var(--body-color);
             text-transform: uppercase;
             letter-spacing: 0.5px;
             font-size: 0.9rem;
         }
         
         .btn-clear:hover {
-            background: var(--accent2);
+            background: var(--card-bg);
+            border-color: var(--primary);
             transform: translateY(-1px);
-            box-shadow: 0 2px 8px rgba(33, 33, 33, 0.25);
+            box-shadow: 0 4px 12px rgba(96, 147, 105, 0.3);
         }
         
         .user-card {
-            background: var(--lt2);
-            border-left: 5px solid var(--accent5);
+            background: #FAFAFA;
+            border-left: 5px solid var(--primary);
             padding: 20px;
             margin-bottom: 14px;
             border-radius: 10px;
@@ -528,20 +545,21 @@ HTML_TEMPLATE = '''
         }
         
         .user-card:hover {
-            background: #e0e0e0;
-            border-left-color: var(--accent1);
-            box-shadow: 0 4px 12px rgba(66, 133, 244, 0.2);
+            background: #FFFFFF;
+            border-left-color: #7FB88A;
+            box-shadow: 0 4px 12px rgba(96, 147, 105, 0.3);
             transform: translateX(8px);
         }
         
         .badge-licenca {
+            font-family: 'Cairo', sans-serif;
             cursor: pointer;
             transition: all 0.3s;
-            background: var(--accent5) !important;
+            background: var(--primary) !important;
             padding: 10px 18px;
             font-size: 0.95rem;
             border-radius: 8px;
-            font-weight: 500;
+            font-weight: 600;
         }
         
         .badge-licenca:hover {
@@ -554,17 +572,20 @@ HTML_TEMPLATE = '''
             background-color: #ffebee !important;
             font-weight: 600;
             border-left: 5px solid #f44336;
+            color: #333333;
         }
         
         .table-warning {
-            background-color: #faffcc !important;
+            background-color: #fff9e6 !important;
             font-weight: 600;
-            border-left: 5px solid #EEFF41;
+            border-left: 5px solid var(--primary);
+            color: #333333;
         }
         
         .table-info {
             background-color: #e1f5fe !important;
-            border-left: 5px solid var(--accent5);
+            border-left: 5px solid var(--card-bg);
+            color: #333333;
         }
         
         .table-danger:hover, .table-warning:hover, .table-info:hover {
@@ -572,23 +593,24 @@ HTML_TEMPLATE = '''
         }
         
         .table-dark {
-            background: linear-gradient(135deg, var(--accent1) 0%, var(--accent5) 100%) !important;
-            color: var(--lt1);
+            background: linear-gradient(135deg, var(--card-bg) 0%, var(--primary) 100%) !important;
+            color: var(--body-color);
         }
         
         .table-dark th {
+            font-family: 'Cairo', sans-serif;
             border: none !important;
             padding: 16px !important;
-            font-weight: 600;
+            font-weight: 700;
             text-transform: uppercase;
             font-size: 0.85rem;
             letter-spacing: 0.8px;
         }
         
         .modal-header {
-            background: linear-gradient(135deg, var(--accent1) 0%, var(--accent5) 100%);
-            color: var(--lt1);
-            border-radius: 16px 16px 0 0;
+            background: linear-gradient(135deg, var(--card-bg) 0%, var(--primary) 100%);
+            color: var(--body-color);
+            border-radius: 8px 8px 0 0;
         }
         
         .modal-header .btn-close {
@@ -596,27 +618,33 @@ HTML_TEMPLATE = '''
         }
         
         .modal-content {
-            border-radius: 16px;
+            border-radius: 8px;
             border: none;
-            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.2);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+            background-color: #FFFFFF;
+            color: #333333;
         }
         
         .badge.bg-danger {
             background: #f44336 !important;
+            font-family: 'Cairo', sans-serif;
         }
         
         .badge.bg-warning {
-            background: #EEFF41 !important;
-            color: var(--dk1) !important;
-            font-weight: 600;
+            background: var(--primary) !important;
+            color: var(--body-color) !important;
+            font-family: 'Cairo', sans-serif;
+            font-weight: 700;
         }
         
         .badge.bg-info {
-            background: var(--accent5) !important;
+            background: var(--card-bg) !important;
+            font-family: 'Cairo', sans-serif;
         }
         
         .badge.bg-success {
             background: #4CAF50 !important;
+            font-family: 'Cairo', sans-serif;
         }
         
         /* Animações */
@@ -641,16 +669,25 @@ HTML_TEMPLATE = '''
         }
         
         ::-webkit-scrollbar-track {
-            background: var(--lt2);
+            background: #F5F5F5;
         }
         
         ::-webkit-scrollbar-thumb {
-            background: var(--accent3);
+            background: var(--primary);
             border-radius: 5px;
         }
         
         ::-webkit-scrollbar-thumb:hover {
-            background: var(--accent5);
+            background: #7FB88A;
+        }
+        
+        .table {
+            color: #333333;
+            background-color: #FFFFFF;
+        }
+        
+        .table-hover tbody tr:hover {
+            background-color: rgba(96, 147, 105, 0.1) !important;
         }
     </style>
 </head>
