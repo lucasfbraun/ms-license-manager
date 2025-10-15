@@ -14,21 +14,18 @@ def load_data():
     df = pd.read_excel(EXCEL_FILE, sheet_name='Planilha1')
     
     # Limpeza e conversão de dados
-    df['valor unitario'] = pd.to_numeric(df['valor unitario'], errors='coerce')
-    df['quantidade de licenças'] = pd.to_numeric(df['quantidade de licenças'], errors='coerce')
-    df['total'] = pd.to_numeric(df['total'], errors='coerce')
-    
-    # Calcular total se estiver vazio
-    df['total'] = df.apply(
-        lambda row: row['valor unitario'] * row['quantidade de licenças'] 
-        if pd.isna(row['total']) else row['total'], 
-        axis=1
-    )
+    df['valorAnual'] = pd.to_numeric(df['valorAnual'], errors='coerce')
+    df['valorUnitarioMensal'] = pd.to_numeric(df['valorUnitarioMensal'], errors='coerce')
+    df['qtdLicenca'] = pd.to_numeric(df['qtdLicenca'], errors='coerce')
+    df['mesesContrato'] = pd.to_numeric(df['mesesContrato'], errors='coerce')
+    df['proRata'] = pd.to_numeric(df['proRata'], errors='coerce')
+    df['valorTotalLicenca'] = pd.to_numeric(df['valorTotalLicenca'], errors='coerce')
     
     # Converter datas
-    df['data criação do e-mail'] = pd.to_datetime(df['data criação do e-mail'], errors='coerce')
-    df['inicio contrato'] = pd.to_datetime(df['inicio contrato'], errors='coerce')
-    df['final contrato'] = pd.to_datetime(df['final contrato'], errors='coerce')
+    df['DataCriacaoEmail'] = pd.to_datetime(df['DataCriacaoEmail'], errors='coerce')
+    df['DataCriacaoFormatada'] = pd.to_datetime(df['DataCriacaoFormatada'], errors='coerce')
+    df['inicioContrato'] = pd.to_datetime(df['inicioContrato'], errors='coerce')
+    df['finalContrato'] = pd.to_datetime(df['finalContrato'], errors='coerce')
     
     return df
 
@@ -37,7 +34,7 @@ def apply_filters(df, filters):
     filtered_df = df.copy()
     
     if filters.get('empresa') and filters['empresa'] != 'Todas':
-        filtered_df = filtered_df[filtered_df['Empresa'] == filters['empresa']]
+        filtered_df = filtered_df[filtered_df['empresa'] == filters['empresa']]
     
     if filters.get('estado') and filters['estado'] != 'Todos':
         filtered_df = filtered_df[filtered_df['estado'] == filters['estado']]
@@ -52,7 +49,7 @@ def apply_filters(df, filters):
         filtered_df = filtered_df[filtered_df['licenca'] == filters['licenca']]
     
     if filters.get('modalidade') and filters['modalidade'] != 'Todas':
-        filtered_df = filtered_df[filtered_df['Modalidade da licença'] == filters['modalidade']]
+        filtered_df = filtered_df[filtered_df['modalidadeLicenca'] == filters['modalidade']]
     
     return filtered_df
 
@@ -68,14 +65,14 @@ def create_graphs(filters=None):
     
     # KPIs
     kpis = {
-        'total_gasto': f"R$ {df['total'].sum():,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.'),
+        'total_gasto': f"R$ {df['valorTotalLicenca'].sum():,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.'),
         'total_usuarios': len(df),
-        'total_empresas': df['Empresa'].nunique(),
-        'total_licencas': int(df['quantidade de licenças'].sum())
+        'total_empresas': df['empresa'].nunique(),
+        'total_licencas': int(df['qtdLicenca'].sum())
     }
     
     # 1. Gastos por Empresa
-    gastos_empresa = df.groupby('Empresa')['total'].sum().sort_values(ascending=False).head(15)
+    gastos_empresa = df.groupby('empresa')['valorTotalLicenca'].sum().sort_values(ascending=False).head(15)
     fig1 = px.bar(x=gastos_empresa.values, y=gastos_empresa.index, orientation='h',
                   labels={'x': 'Gasto Total (R$)', 'y': 'Empresa'},
                   title='💼 Top 15 Empresas por Gasto')
@@ -89,7 +86,7 @@ def create_graphs(filters=None):
     graphs['empresas'] = fig1.to_html(full_html=False, div_id="graph1")
     
     # 2. Distribuição por Estado
-    estado_counts = df.groupby('estado')['total'].sum()
+    estado_counts = df.groupby('estado')['valorTotalLicenca'].sum()
     fig2 = px.pie(values=estado_counts.values, names=estado_counts.index,
                   title='🗺️ Distribuição por Estado', hole=0.4,
                   color_discrete_sequence=['#609369', '#026B69', '#7FB88A', '#014847', '#EEFF41', '#EEEEEE'])
@@ -102,7 +99,7 @@ def create_graphs(filters=None):
     graphs['estados'] = fig2.to_html(full_html=False, div_id="graph2")
     
     # 3. Top 10 Centros de Custo
-    centro_custo = df.groupby('Centro de Custo')['total'].sum().sort_values(ascending=False).head(10)
+    centro_custo = df.groupby('Centro de Custo')['valorTotalLicenca'].sum().sort_values(ascending=False).head(10)
     fig3 = px.bar(x=centro_custo.index, y=centro_custo.values,
                   labels={'x': 'Centro de Custo', 'y': 'Gasto Total (R$)'},
                   title='🏦 Top 10 Centros de Custo (Maior Gasto)')
@@ -117,7 +114,7 @@ def create_graphs(filters=None):
     graphs['centro_custo'] = fig3.to_html(full_html=False, div_id="graph3")
     
     # 4. Licenças Mais Usadas
-    licencas_count = df.groupby('licenca')['quantidade de licenças'].sum().sort_values(ascending=False).head(10)
+    licencas_count = df.groupby('licenca')['qtdLicenca'].sum().sort_values(ascending=False).head(10)
     fig4 = px.bar(x=licencas_count.values, y=licencas_count.index, orientation='h',
                   labels={'x': 'Quantidade', 'y': 'Tipo de Licença'},
                   title='📊 Top 10 Licenças Mais Usadas')
@@ -131,7 +128,7 @@ def create_graphs(filters=None):
     graphs['licencas'] = fig4.to_html(full_html=False, div_id="graph4")
     
     # 5. Modalidade de Licença
-    modalidade = df.groupby('Modalidade da licença')['total'].sum()
+    modalidade = df.groupby('modalidadeLicenca')['valorTotalLicenca'].sum()
     fig5 = px.pie(values=modalidade.values, names=modalidade.index,
                   title='💳 Gastos por Modalidade de Licença', hole=0.3,
                   color_discrete_sequence=['#609369', '#026B69', '#7FB88A', '#014847', '#EEFF41'])
@@ -144,7 +141,7 @@ def create_graphs(filters=None):
     graphs['modalidade'] = fig5.to_html(full_html=False, div_id="graph5")
     
     # 6. Gastos por Setor
-    setor = df.groupby('setor')['total'].sum().sort_values(ascending=False).head(15)
+    setor = df.groupby('setor')['valorTotalLicenca'].sum().sort_values(ascending=False).head(15)
     fig6 = px.bar(x=setor.values, y=setor.index, orientation='h',
                   labels={'x': 'Gasto Total (R$)', 'y': 'Setor'},
                   title='🏢 Top 15 Setores por Gasto')
@@ -158,7 +155,7 @@ def create_graphs(filters=None):
     graphs['setor'] = fig6.to_html(full_html=False, div_id="graph6")
     
     # 7. Faturadores
-    faturador = df.groupby('faturador')['total'].sum().dropna()
+    faturador = df.groupby('faturador')['valorTotalLicenca'].sum().dropna()
     if len(faturador) > 0:
         fig7 = px.pie(values=faturador.values, names=faturador.index,
                       title='🔄 Distribuição por Fornecedor (Faturador)',
@@ -184,21 +181,21 @@ def gerar_tabela_contratos(df):
     from datetime import datetime, timedelta
     
     # Filtrar apenas registros com datas de contrato
-    df_contratos = df[df['final contrato'].notna()].copy()
+    df_contratos = df[df['finalContrato'].notna()].copy()
     
     if len(df_contratos) == 0:
         return '<p class="text-muted">Nenhum contrato encontrado com data de vencimento.</p>'
     
-    # Agrupar por empresa
-    contratos_por_empresa = df_contratos.groupby('Empresa').agg({
-        'inicio contrato': 'min',
-        'final contrato': 'max',
-        'total': 'sum',
-        'quantidade de licenças': 'sum'
+    # Agrupar por empresa e licença para mostrar cada contrato
+    contratos_detalhados = df_contratos.groupby(['empresa', 'licenca', 'modalidadeLicenca']).agg({
+        'inicioContrato': 'min',
+        'finalContrato': 'max',
+        'valorTotalLicenca': 'sum',
+        'qtdLicenca': 'sum'
     }).reset_index()
     
-    # Ordenar por data de vencimento (mais próximos primeiro)
-    contratos_por_empresa = contratos_por_empresa.sort_values('final contrato')
+    # Ordenar por empresa e depois por data de vencimento
+    contratos_detalhados = contratos_detalhados.sort_values(['empresa', 'finalContrato'])
     
     # Data atual
     hoje = datetime.now()
@@ -212,22 +209,26 @@ def gerar_tabela_contratos(df):
                 <tr>
                     <th>Status</th>
                     <th>Empresa</th>
-                    <th>Início do Contrato</th>
+                    <th>Licença</th>
+                    <th>Modalidade</th>
+                    <th>Início</th>
                     <th>Vencimento</th>
                     <th>Dias Restantes</th>
-                    <th>Licenças</th>
+                    <th>Qtd</th>
                     <th>Valor Total</th>
                 </tr>
             </thead>
             <tbody>
     '''
     
-    for _, row in contratos_por_empresa.iterrows():
-        empresa = row['Empresa']
-        inicio = row['inicio contrato']
-        fim = row['final contrato']
-        total = row['total']
-        qtd_licencas = row['quantidade de licenças']
+    for _, row in contratos_detalhados.iterrows():
+        empresa = row['empresa']
+        licenca = row['licenca']
+        modalidade = row['modalidadeLicenca']
+        inicio = row['inicioContrato']
+        fim = row['finalContrato']
+        total = row['valorTotalLicenca']
+        qtd_licencas = row['qtdLicenca']
         
         # Calcular dias restantes
         if pd.notna(fim):
@@ -259,6 +260,8 @@ def gerar_tabela_contratos(df):
                 <tr class="{row_class}">
                     <td><strong>{status}</strong></td>
                     <td><strong>{empresa}</strong></td>
+                    <td>{licenca}</td>
+                    <td><small>{modalidade}</small></td>
                     <td>{inicio_formatado}</td>
                     <td><strong>{fim_formatado}</strong></td>
                     <td><strong>{dias_texto}</strong></td>
@@ -1028,12 +1031,12 @@ def dashboard():
     
     # Opções para os filtros
     filter_options = {
-        'empresas': sorted(df_original['Empresa'].dropna().unique()),
+        'empresas': sorted(df_original['empresa'].dropna().unique()),
         'estados': sorted(df_original['estado'].dropna().unique()),
         'setores': sorted(df_original['setor'].dropna().unique()),
         'centros_custo': sorted(df_original['Centro de Custo'].dropna().unique()),
         'licencas': sorted(df_original['licenca'].dropna().unique()),
-        'modalidades': sorted(df_original['Modalidade da licença'].dropna().unique())
+        'modalidades': sorted(df_original['modalidadeLicenca'].dropna().unique())
     }
     
     # Criar gráficos com filtros aplicados
