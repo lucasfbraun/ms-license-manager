@@ -7,6 +7,7 @@ from datetime import datetime
 
 app = Flask(__name__)
 
+# Caminho do arquivo Excel utilizado pelo dashboard
 EXCEL_FILE = 'LICENCIAMENTO MICROSOFT (1).xlsx'
 
 def load_data():
@@ -117,18 +118,33 @@ def create_graphs(filters=None):
     graphs['centro_custo'] = fig3.to_html(full_html=False, div_id="graph3")
     
     # 4. Licenças Mais Usadas
-    licencas_count = df.groupby('licenca')['qtdLicenca'].sum().sort_values(ascending=False).head(10)
-    fig4 = px.bar(x=licencas_count.values, y=licencas_count.index, orientation='h',
-                  labels={'x': 'Quantidade', 'y': 'Tipo de Licença'},
-                  title='📊 Top 10 Licenças Mais Usadas')
-    fig4.update_traces(marker_color='#7FB88A')
-    fig4.update_layout(
-        plot_bgcolor='#FFFFFF',
-        paper_bgcolor='#FFFFFF',
-        font=dict(color='#333333', family='Cairo, sans-serif'),
-        title_font=dict(size=18, color='#333333', family='Cairo')
-    )
-    graphs['licencas'] = fig4.to_html(full_html=False, div_id="graph4")
+    try:
+        licencas_count = df.groupby('licenca')['qtdLicenca'].sum().sort_values(ascending=False).head(10)
+    except Exception as e:
+        app.logger.error(f"Erro ao agrupar licencas: {e}")
+        licencas_count = pd.Series(dtype='float64')
+
+    app.logger.info(f"Licenças - linhas df: {len(df)}, colunas: {list(df.columns)}")
+    app.logger.info(f"Licenças - tamanho licencas_count: {len(licencas_count)}")
+
+    if licencas_count is not None and len(licencas_count) > 0:
+        fig4 = px.bar(x=licencas_count.values, y=licencas_count.index, orientation='h',
+                      labels={'x': 'Quantidade', 'y': 'Tipo de Licença'},
+                      title='📊 Top 10 Licenças Mais Usadas')
+        fig4.update_traces(marker_color='#026B69')
+        fig4.update_layout(
+            plot_bgcolor='#FFFFFF',
+            paper_bgcolor='#FFFFFF',
+            font=dict(color='#333333', family='Cairo, sans-serif'),
+            title_font=dict(size=18, color='#333333', family='Cairo')
+        )
+        graphs['licencas'] = fig4.to_html(full_html=False, div_id="graph4")
+    else:
+        graphs['licencas'] = """
+        <div class='alert alert-warning'>
+            Não há dados suficientes para montar o gráfico de Licenças. Verifique se as colunas 'licenca' e 'qtdLicenca' possuem valores na planilha e se os filtros não zeraram os resultados.
+        </div>
+        """
     
     # 5. Modalidade de Licença
     modalidade = df.groupby('modalidadeLicenca')['valorTotalLicenca'].sum()
@@ -296,9 +312,10 @@ HTML_TEMPLATE = '''
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard - Licenciamento Microsoft</title>
+    <title>Gerenciamento - Licenciamento Microsoft</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700&display=swap');
         
@@ -859,6 +876,54 @@ HTML_TEMPLATE = '''
                         </h5>
                         {{ graphs.licencas | safe }}
                         <div id="licencasList" class="mt-3"></div>
+                        <script>
+                        (function() {
+                            const listEl = document.getElementById('licencasList');
+                            function renderFallbackList(gd) {
+                                try {
+                                    const labels = (gd && gd.data && gd.data[0] && gd.data[0].y) || [];
+                                    if (!labels || labels.length === 0 || !listEl) return;
+                                    let html = '<div class="d-flex flex-wrap gap-2">';
+                                    labels.forEach(lbl => {
+                                        const text = String(lbl);
+                                        html += `<button type="button" class="btn btn-sm" style="border:1px solid #026B69;color:#026B69" onclick="window.mostrarUsuarios('${text.replace(/'/g, "&#39;")}')">${text}</button>`;
+                                    });
+                                    html += '</div>';
+                                    listEl.innerHTML = html;
+                                } catch (e) { console.warn('Falha ao montar lista fallback de licenças', e); }
+                            }
+
+                            function bindClick() {
+                                const gd = document.getElementById('graph4');
+                                if (!gd) return false;
+                                if (typeof gd.on === 'function') {
+                                    try {
+                                        renderFallbackList(gd);
+                                        gd.on('plotly_click', function(evt) {
+                                            try {
+                                                const pt = evt.points && evt.points[0];
+                                                const licenca = String((pt && (pt.y ?? pt.label ?? pt.text)) || '');
+                                                console.log('[licencas] clique no gráfico:', licenca, pt);
+                                                if (licenca) { window.mostrarUsuarios(licenca); }
+                                            } catch (e) {
+                                                console.error('Erro ao capturar clique na licença:', e);
+                                            }
+                                        });
+                                        gd.style.cursor = 'pointer';
+                                    } catch (e) { console.warn('Falha ao vincular click no gráfico', e); }
+                                    return true;
+                                }
+                                return false;
+                            }
+                            if (!bindClick()) {
+                                let attempts = 0;
+                                const iv = setInterval(() => {
+                                    attempts++;
+                                    if (bindClick() || attempts > 25) clearInterval(iv);
+                                }, 200);
+                            }
+                        })();
+                        </script>
                     </div>
                 </div>
             </div>
@@ -937,23 +1002,21 @@ HTML_TEMPLATE = '''
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
                 </div>
-                    </div>
-                    
-                    <div class="col-md-2">
-                        <label class="filter-label">Licença</label>
-                        <select name="licenca" class="form-select form-select-sm">
-                            <option value="Todas" {% if current_filters.licenca == 'Todas' %}selected{% endif %}>Todas</option>
-                            {% for licenca in filter_options.licencas %}
-                            <option value="{{ licenca }}" {% if current_filters.licenca == licenca %}selected{% endif %}>{{ licenca }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
+            </div>
+        </div>
+    </div>
+
+        <script>
+    window.mostrarUsuarios = function(licenca) {
+            const modalEl = document.getElementById('modalUsuarios');
+            let modal = null;
+            try {
+                if (window.bootstrap && bootstrap.Modal) {
+                    modal = new bootstrap.Modal(modalEl);
                 }
+            } catch (e) {
+                console.warn('Bootstrap Modal não disponível, aplicando fallback:', e);
             }
-        });
-        
-        function mostrarUsuarios(licenca) {
-            const modal = new bootstrap.Modal(document.getElementById('modalUsuarios'));
             document.getElementById('modalTitle').textContent = `👥 Usuários da Licença: ${licenca}`;
             document.getElementById('modalBody').innerHTML = `
                 <div class="text-center">
@@ -963,12 +1026,25 @@ HTML_TEMPLATE = '''
                     <p class="mt-2">Carregando usuários...</p>
                 </div>
             `;
-            modal.show();
-            
-                return jsonify({'total_usuarios': total_usuarios, 'usuarios': usuarios_list})
+            if (modal) {
+                modal.show();
+            } else {
+                // Fallback simples caso Bootstrap não esteja disponível
+                modalEl.classList.add('show');
+                modalEl.style.display = 'block';
+                modalEl.removeAttribute('aria-hidden');
+                modalEl.setAttribute('aria-modal', 'true');
+            }
             fetch(`/api/usuarios/${encodeURIComponent(licenca)}`)
-                .then(response => response.json())
+                .then(response => {
+                    if (!response.ok) {
+                        console.error('Falha HTTP ao buscar usuários:', response.status, response.statusText);
+                        throw new Error('HTTP ' + response.status);
+                    }
+                    return response.json();
+                })
                 .then(data => {
+                    console.log('Dados recebidos de /api/usuarios:', data);
                     let html = `
                         <div class="alert alert-info">
                             <strong>Total de usuários com esta licença: ${data.total_usuarios}</strong>
@@ -983,19 +1059,19 @@ HTML_TEMPLATE = '''
                                 <div class="user-card">
                                     <div class="row">
                                         <div class="col-md-8">
-                                            <h6 class="mb-1"><strong>${usuario.colaborador}</strong></h6>
+                                            <h6 class="mb-1"><strong>${usuario['Colaborador'] || usuario.colaborador || ''}</strong></h6>
                                             <p class="mb-1 text-muted small">
-                                                📧 ${usuario.email || 'Sem email'}<br>
-                                                🏢 ${usuario.empresa}<br>
-                                                🏭 Setor: ${usuario.setor}<br>
-                                                🗺️ Estado: ${usuario.estado}<br>
-                                                🏦 Centro de Custo: ${usuario.centro_custo}
+                                                📧 ${usuario['Email'] || usuario.email || 'Sem email'}<br>
+                                                🏢 ${usuario['Empresa'] || usuario.empresa || ''}<br>
+                                                🏭 Setor: ${usuario['Setor'] || usuario.setor || ''}<br>
+                                                🗺️ Estado: ${usuario['Estado'] || usuario.estado || ''}<br>
+                                                🏦 Centro de Custo: ${usuario['Centro de Custo'] || usuario.centro_custo || ''}
                                             </p>
                                         </div>
                                         <div class="col-md-4 text-end">
-                                            <p class="mb-1"><strong>Qtd:</strong> ${usuario.quantidade}</p>
-                                            <p class="mb-1"><strong>Valor Unit:</strong> R$ ${usuario.valor_unitario?.toFixed(2) || '0.00'}</p>
-                                            <p class="mb-0"><strong>Total:</strong> R$ ${usuario.total?.toFixed(2) || '0.00'}</p>
+                                            <p class="mb-1"><strong>Qtd:</strong> ${usuario['Quantidade'] ?? usuario.quantidade ?? ''}</p>
+                                            <p class="mb-1"><strong>Valor Unit:</strong> R$ ${(usuario['Valor Unitário'] ?? usuario.valor_unitario ?? 0).toFixed ? (usuario['Valor Unitário'] ?? usuario.valor_unitario).toFixed(2) : Number(usuario['Valor Unitário'] ?? usuario.valor_unitario ?? 0).toFixed(2)}</p>
+                                            <p class="mb-0"><strong>Total:</strong> R$ ${(usuario['Total'] ?? usuario.total ?? 0).toFixed ? (usuario['Total'] ?? usuario.total).toFixed(2) : Number(usuario['Total'] ?? usuario.total ?? 0).toFixed(2)}</p>
                                         </div>
                                     </div>
                                 </div>
@@ -1013,7 +1089,7 @@ HTML_TEMPLATE = '''
                         </div>
                     `;
                 });
-        }
+    }
     </script>
 </body>
 </html>
@@ -1056,17 +1132,19 @@ def dashboard():
 def api_usuarios(licenca):
     """API para retornar usuários de uma licença específica"""
     df = load_data()
+    licenca_norm = (licenca or '').strip().lower()
+    app.logger.info(f"/api/usuarios chamada para licença: '{licenca}' (norm='{licenca_norm}')")
     
-    # Filtrar dados pela licença
-    dados_licenca = df[df['licenca'] == licenca]
+    # Filtrar dados pela licença (case-insensitive, ignorando espaços)
+    dados_licenca = df[df['licenca'].astype(str).str.strip().str.lower() == licenca_norm]
     
     # Obter lista de usuários
-    usuarios = dados_licenca[['colaborador', 'email', 'empresa', 'setor', 'estado', 'Centro de Custo',
+    usuarios = dados_licenca[['nomeColaborador', 'email', 'empresa', 'setor', 'estado', 'Centro de Custo',
                                'qtdLicenca', 'valorUnitarioMensal', 'valorTotalLicenca']]
     
     # Renomear colunas para o formato desejado na resposta
     usuarios = usuarios.rename(columns={
-        'colaborador': 'Colaborador',
+    'nomeColaborador': 'Colaborador',
         'email': 'Email',
         'empresa': 'Empresa',
         'setor': 'Setor',
