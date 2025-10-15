@@ -1,9 +1,11 @@
-from flask import Flask, render_template_string, request, jsonify
+from flask import Flask, render_template_string, request, jsonify, Response
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import json
 from datetime import datetime
+from urllib.parse import quote
+import re
 
 app = Flask(__name__)
 
@@ -235,6 +237,7 @@ def gerar_tabela_contratos(df):
                     <th>Dias Restantes</th>
                     <th>Qtd</th>
                     <th>Valor Total</th>
+                    <th>Rateio</th>
                 </tr>
             </thead>
             <tbody>
@@ -275,6 +278,9 @@ def gerar_tabela_contratos(df):
             fim_formatado = fim.strftime('%d/%m/%Y') if pd.notna(fim) else 'N/A'
             total_formatado = f"R$ {total:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
             
+            # URL de exportação CSV (rateio por contrato)
+            rateio_url = f"/api/rateio_contrato?empresa={quote(str(empresa))}&licenca={quote(str(licenca))}&modalidade={quote(str(modalidade))}"
+
             html += f'''
                 <tr class="{row_class}">
                     <td><strong>{status}</strong></td>
@@ -286,6 +292,11 @@ def gerar_tabela_contratos(df):
                     <td><strong>{dias_texto}</strong></td>
                     <td>{int(qtd_licencas)}</td>
                     <td>{total_formatado}</td>
+                    <td>
+                        <a class="btn btn-sm btn-outline-primary" href="{rateio_url}" target="_blank" rel="noopener" download>
+                            Exportar CSV
+                        </a>
+                    </td>
                 </tr>
             '''
     
@@ -1363,6 +1374,101 @@ def api_usuarios(licenca):
     total_usuarios = len(usuarios_list)
     
     return jsonify({'total_usuarios': total_usuarios, 'usuarios': usuarios_list})
+
+
+@app.route('/api/rateio_contrato', methods=['GET'])
+def api_rateio_contrato():
+    """Gera o rateio por contrato (empresa + licença + modalidade) por Centro de Custo e exporta CSV."""
+    empresa = request.args.get('empresa')
+    licenca = request.args.get('licenca')
+    modalidade = request.args.get('modalidade')
+    if not empresa or not licenca:
+        return jsonify({'error': 'Parâmetros obrigatórios ausentes: empresa e licenca'}), 400
+
+    df = load_data()
+    # Filtro por contrato (empresa + licenca [+ modalidade quando fornecida])
+    mask = (
+        (df['empresa'].astype(str) == str(empresa)) &
+        (df['licenca'].astype(str) == str(licenca))
+    )
+    if modalidade:
+        mask &= (df['modalidadeLicenca'].astype(str) == str(modalidade))
+
+    dados = df[mask].copy()
+    if dados.empty:
+        return jsonify({'error': 'Nenhum dado encontrado para o contrato informado.'}), 404
+
+    # Cálculos por Centro de Custo
+    # - Quantidade por Centro de Custo: soma de qtdLicenca
+    # - Valor por Centro de Custo: soma de valorTotalLicenca
+    # - % por Centro de Custo: (valor_cc / valor_total_contrato) * 100
+    dados['qtdLicenca'] = pd.to_numeric(dados['qtdLicenca'], errors='coerce')
+    dados['valorTotalLicenca'] = pd.to_numeric(dados['valorTotalLicenca'], errors='coerce')
+    grp = dados.groupby('Centro de Custo', dropna=False).agg({
+        'qtdLicenca': 'sum',
+        'valorTotalLicenca': 'sum'
+    }).reset_index().rename(columns={
+        'Centro de Custo': 'centro_custo',
+        'qtdLicenca': 'qtd_cc',
+        'valorTotalLicenca': 'valor_cc'
+    })
+
+    valor_total = grp['valor_cc'].sum()
+    # Evitar divisão por zero
+    grp['perc_cc'] = grp['valor_cc'].apply(lambda v: (float(v) / float(valor_total) * 100) if pd.notna(v) and valor_total not in [0, None] else 0.0)
+
+    # Montar DataFrame final com colunas solicitadas
+    out = grp.copy()
+    out.insert(0, 'licenca', str(licenca))
+    out.insert(0, 'empresa', str(empresa))
+    # Renomear para os rótulos finais em PT-BR
+    out = out.rename(columns={
+        'qtd_cc': 'qtd (por centro de custo)',
+        'valor_cc': 'valor por centro de custo',
+        'perc_cc': '% por centro de custo'
+    })
+
+    # Ordenar por valor decrescente
+    out = out.sort_values('valor por centro de custo', ascending=False)
+
+    # Formatação: números com separador decimal "," e separador de milhar "." na exportação CSV
+    def fmt_val(v):
+        try:
+            return (f"{float(v):,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.'))
+        except Exception:
+            return ''
+
+    out_fmt = out.copy()
+    out_fmt['valor por centro de custo'] = out_fmt['valor por centro de custo'].apply(fmt_val)
+    out_fmt['% por centro de custo'] = out_fmt['% por centro de custo'].apply(lambda x: f"{float(x):.2f}".replace('.', ',') if pd.notna(x) else '')
+
+    # Gerar CSV com separador ;
+    csv_lines = []
+    columns = ['empresa', 'licenca', 'qtd (por centro de custo)', 'centro_custo', 'valor por centro de custo', '% por centro de custo']
+    csv_lines.append(';'.join(columns))
+    for _, row in out_fmt.iterrows():
+        vals = [
+            str(row.get('empresa', '')),
+            str(row.get('licenca', '')),
+            str(int(row.get('qtd (por centro de custo)', 0))) if pd.notna(row.get('qtd (por centro de custo)')) else '0',
+            str(row.get('centro_custo', '')),
+            str(row.get('valor por centro de custo', '')),
+            str(row.get('% por centro de custo', ''))
+        ]
+        csv_lines.append(';'.join(vals))
+
+    csv_data = '\n'.join(csv_lines)
+    # Nome de arquivo amigável
+    file_name = f"rateio_{re.sub(r'[^a-zA-Z0-9_-]+', '_', str(empresa))}_{re.sub(r'[^a-zA-Z0-9_-]+', '_', str(licenca))}"
+    if modalidade:
+        file_name += f"_{re.sub(r'[^a-zA-Z0-9_-]+', '_', str(modalidade))}"
+    file_name += '.csv'
+
+    headers = {
+        'Content-Disposition': f'attachment; filename="{file_name}"',
+        'Content-Type': 'text/csv; charset=utf-8'
+    }
+    return Response(csv_data, headers=headers)
 
 
 if __name__ == '__main__':
