@@ -79,13 +79,26 @@ def create_graphs(filters=None):
     fig1 = px.bar(x=gastos_empresa.values, y=gastos_empresa.index, orientation='h',
                   labels={'x': 'Gasto Total (R$)', 'y': 'Empresa'},
                   title='💼 Top 15 Empresas por Gasto')
-    fig1.update_traces(marker_color='#0078D4')
+    fig1.update_traces(marker_color='#4285F4')  # accent1
+    fig1.update_layout(
+        plot_bgcolor='#FFFFFF',
+        paper_bgcolor='#FFFFFF',
+        font=dict(color='#595959', family='Roboto, sans-serif'),
+        title_font=dict(size=18, color='#212121')
+    )
     graphs['empresas'] = fig1.to_html(full_html=False, div_id="graph1")
     
     # 2. Distribuição por Estado
     estado_counts = df.groupby('estado')['total'].sum()
     fig2 = px.pie(values=estado_counts.values, names=estado_counts.index,
-                  title='🗺️ Distribuição por Estado', hole=0.4)
+                  title='🗺️ Distribuição por Estado', hole=0.4,
+                  color_discrete_sequence=['#4285F4', '#0097A7', '#78909C', '#EEFF41', '#212121', '#EEEEEE'])
+    fig2.update_layout(
+        plot_bgcolor='#FFFFFF',
+        paper_bgcolor='#FFFFFF',
+        font=dict(color='#595959', family='Roboto, sans-serif'),
+        title_font=dict(size=18, color='#212121')
+    )
     graphs['estados'] = fig2.to_html(full_html=False, div_id="graph2")
     
     # 3. Top 10 Centros de Custo
@@ -93,8 +106,14 @@ def create_graphs(filters=None):
     fig3 = px.bar(x=centro_custo.index, y=centro_custo.values,
                   labels={'x': 'Centro de Custo', 'y': 'Gasto Total (R$)'},
                   title='🏦 Top 10 Centros de Custo (Maior Gasto)')
-    fig3.update_traces(marker_color='#DC3545')
-    fig3.update_layout(xaxis_tickangle=-45)
+    fig3.update_traces(marker_color='#0097A7')  # accent5
+    fig3.update_layout(
+        xaxis_tickangle=-45,
+        plot_bgcolor='#FFFFFF',
+        paper_bgcolor='#FFFFFF',
+        font=dict(color='#595959', family='Roboto, sans-serif'),
+        title_font=dict(size=18, color='#212121')
+    )
     graphs['centro_custo'] = fig3.to_html(full_html=False, div_id="graph3")
     
     # 4. Licenças Mais Usadas
@@ -102,13 +121,26 @@ def create_graphs(filters=None):
     fig4 = px.bar(x=licencas_count.values, y=licencas_count.index, orientation='h',
                   labels={'x': 'Quantidade', 'y': 'Tipo de Licença'},
                   title='📊 Top 10 Licenças Mais Usadas')
-    fig4.update_traces(marker_color='#28A745')
+    fig4.update_traces(marker_color='#78909C')  # accent3
+    fig4.update_layout(
+        plot_bgcolor='#FFFFFF',
+        paper_bgcolor='#FFFFFF',
+        font=dict(color='#595959', family='Roboto, sans-serif'),
+        title_font=dict(size=18, color='#212121')
+    )
     graphs['licencas'] = fig4.to_html(full_html=False, div_id="graph4")
     
     # 5. Modalidade de Licença
     modalidade = df.groupby('Modalidade da licença')['total'].sum()
     fig5 = px.pie(values=modalidade.values, names=modalidade.index,
-                  title='💳 Gastos por Modalidade de Licença', hole=0.3)
+                  title='💳 Gastos por Modalidade de Licença', hole=0.3,
+                  color_discrete_sequence=['#4285F4', '#0097A7', '#EEFF41', '#78909C', '#212121'])
+    fig5.update_layout(
+        plot_bgcolor='#FFFFFF',
+        paper_bgcolor='#FFFFFF',
+        font=dict(color='#595959', family='Roboto, sans-serif'),
+        title_font=dict(size=18, color='#212121')
+    )
     graphs['modalidade'] = fig5.to_html(full_html=False, div_id="graph5")
     
     # 6. Gastos por Setor
@@ -116,14 +148,27 @@ def create_graphs(filters=None):
     fig6 = px.bar(x=setor.values, y=setor.index, orientation='h',
                   labels={'x': 'Gasto Total (R$)', 'y': 'Setor'},
                   title='🏢 Top 15 Setores por Gasto')
-    fig6.update_traces(marker_color='#6F42C1')
+    fig6.update_traces(marker_color='#EEFF41')  # accent6 - Verde Neon
+    fig6.update_layout(
+        plot_bgcolor='#FFFFFF',
+        paper_bgcolor='#FFFFFF',
+        font=dict(color='#595959', family='Roboto, sans-serif'),
+        title_font=dict(size=18, color='#212121')
+    )
     graphs['setor'] = fig6.to_html(full_html=False, div_id="graph6")
     
     # 7. Faturadores
     faturador = df.groupby('faturador')['total'].sum().dropna()
     if len(faturador) > 0:
         fig7 = px.pie(values=faturador.values, names=faturador.index,
-                      title='🔄 Distribuição por Fornecedor (Faturador)')
+                      title='🔄 Distribuição por Fornecedor (Faturador)',
+                      color_discrete_sequence=['#4285F4', '#0097A7', '#78909C', '#EEFF41', '#212121', '#EEEEEE'])
+        fig7.update_layout(
+            plot_bgcolor='#FFFFFF',
+            paper_bgcolor='#FFFFFF',
+            font=dict(color='#595959', family='Roboto, sans-serif'),
+            title_font=dict(size=18, color='#212121')
+        )
         graphs['faturador'] = fig7.to_html(full_html=False, div_id="graph7")
     else:
         graphs['faturador'] = '<p class="text-muted">Sem dados de faturador</p>'
@@ -249,96 +294,343 @@ HTML_TEMPLATE = '''
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
     <style>
+        :root {
+            /* Paleta de Cores Material Design */
+            --dk1: #000000;
+            --lt1: #FFFFFF;
+            --dk2: #595959;
+            --lt2: #EEEEEE;
+            --accent1: #4285F4;
+            --accent2: #212121;
+            --accent3: #78909C;
+            --accent4: #FFAB40;
+            --accent5: #0097A7;
+            --accent6: #EEFF41;
+            --hlink: #0097A7;
+            --folHlink: #0097A7;
+        }
+        
         body {
-            background-color: #f8f9fa;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #FAFAFA;
+            font-family: 'Roboto', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: var(--dk2);
+            line-height: 1.6;
         }
+        
         .dashboard-header {
-            background: linear-gradient(135deg, #0078D4 0%, #0063B1 100%);
-            color: white;
-            padding: 30px;
-            border-radius: 10px;
-            margin-bottom: 30px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            background: linear-gradient(135deg, var(--accent1) 0%, var(--accent5) 100%);
+            color: var(--lt1);
+            padding: 50px;
+            border-radius: 0;
+            margin-bottom: 40px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
         }
+        
+        .dashboard-header h1 {
+            font-weight: 700;
+            margin-bottom: 12px;
+            font-size: 2.5rem;
+            letter-spacing: -0.5px;
+        }
+        
+        .dashboard-header p {
+            font-size: 1.2rem;
+            opacity: 0.95;
+            font-weight: 300;
+        }
+        
+        .dashboard-header small {
+            opacity: 0.85;
+            font-size: 0.9rem;
+        }
+        
         .kpi-card {
-            border-radius: 10px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            transition: transform 0.2s;
-            margin-bottom: 20px;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            margin-bottom: 24px;
+            border: none;
+            overflow: hidden;
         }
+        
         .kpi-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
         }
+        
+        .kpi-card.bg-success {
+            background: linear-gradient(135deg, var(--accent5) 0%, #007c8a 100%) !important;
+        }
+        
+        .kpi-card.bg-primary {
+            background: linear-gradient(135deg, var(--accent1) 0%, #3367d6 100%) !important;
+        }
+        
+        .kpi-card.bg-info {
+            background: linear-gradient(135deg, var(--accent3) 0%, #607D8B 100%) !important;
+        }
+        
+        .kpi-card.bg-warning {
+            background: linear-gradient(135deg, #EEFF41 0%, #C6FF00 100%) !important;
+            color: #000000 !important;
+        }
+        
+        .kpi-card .card-body h6 {
+            font-weight: 600;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 1.2px;
+            opacity: 0.9;
+        }
+        
+        .kpi-card .card-body h2 {
+            font-weight: 700;
+            font-size: 2.8rem;
+            margin: 18px 0;
+            letter-spacing: -1px;
+        }
+        
+        .kpi-card .card-body small {
+            opacity: 0.85;
+            font-size: 0.85rem;
+        }
+        
         .card-custom {
-            border-radius: 10px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            margin-bottom: 20px;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+            margin-bottom: 28px;
+            border: none;
+            background: var(--lt1);
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
         }
+        
+        .card-custom:hover {
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            transform: translateY(-2px);
+        }
+        
+        .card-custom .card-body {
+            padding: 28px;
+        }
+        
+        .card-custom h5 {
+            color: var(--accent1);
+            font-weight: 700;
+            margin-bottom: 24px;
+            font-size: 1.3rem;
+        }
+        
         .filter-section {
-            background: white;
-            padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            background: var(--lt1);
+            padding: 28px;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
             margin-bottom: 30px;
+            border-top: 3px solid var(--accent1);
         }
+        
+        .filter-section h5 {
+            color: var(--accent1);
+            font-weight: 700;
+            margin-bottom: 24px;
+            font-size: 1.2rem;
+        }
+        
         .filter-label {
             font-weight: 600;
-            color: #0078D4;
-            margin-bottom: 5px;
+            color: var(--accent5);
+            margin-bottom: 8px;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
+        
+        .form-select {
+            border: 1px solid #E0E0E0;
+            border-radius: 6px;
+            padding: 10px 14px;
+            transition: all 0.3s;
+            background-color: var(--lt1);
+            color: var(--dk2);
+        }
+        
+        .form-select:focus {
+            border-color: var(--accent1);
+            box-shadow: 0 0 0 0.25rem rgba(66, 133, 244, 0.15);
+            outline: none;
+        }
+        
         .btn-filter {
-            background: #0078D4;
+            background: linear-gradient(135deg, var(--accent1) 0%, var(--accent5) 100%);
             border: none;
-            padding: 10px 30px;
+            padding: 12px 32px;
             font-weight: 600;
+            border-radius: 6px;
+            transition: all 0.2s;
+            color: var(--lt1);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-size: 0.9rem;
         }
+        
         .btn-filter:hover {
-            background: #0063B1;
+            background: linear-gradient(135deg, var(--accent5) 0%, var(--accent1) 100%);
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(66, 133, 244, 0.25);
         }
+        
         .btn-clear {
-            background: #6c757d;
+            background: var(--dk2);
             border: none;
-            padding: 10px 30px;
+            padding: 12px 32px;
             font-weight: 600;
+            border-radius: 6px;
+            transition: all 0.2s;
+            color: var(--lt1);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-size: 0.9rem;
         }
+        
         .btn-clear:hover {
-            background: #5a6268;
+            background: var(--accent2);
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(33, 33, 33, 0.25);
         }
+        
         .user-card {
-            background: #f8f9fa;
-            border-left: 4px solid #0078D4;
-            padding: 15px;
-            margin-bottom: 10px;
-            border-radius: 5px;
+            background: var(--lt2);
+            border-left: 5px solid var(--accent5);
+            padding: 20px;
+            margin-bottom: 14px;
+            border-radius: 10px;
             transition: all 0.3s;
         }
+        
         .user-card:hover {
-            background: #e9ecef;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            background: #e0e0e0;
+            border-left-color: var(--accent1);
+            box-shadow: 0 4px 12px rgba(66, 133, 244, 0.2);
+            transform: translateX(8px);
         }
+        
         .badge-licenca {
             cursor: pointer;
             transition: all 0.3s;
+            background: var(--accent5) !important;
+            padding: 10px 18px;
+            font-size: 0.95rem;
+            border-radius: 8px;
+            font-weight: 500;
         }
+        
         .badge-licenca:hover {
-            transform: scale(1.05);
-            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            transform: scale(1.1);
+            box-shadow: 0 4px 12px rgba(0, 151, 167, 0.5);
+            background: var(--accent1) !important;
         }
+        
         .table-danger {
-            background-color: #f8d7da !important;
+            background-color: #ffebee !important;
             font-weight: 600;
+            border-left: 5px solid #f44336;
         }
+        
         .table-warning {
-            background-color: #fff3cd !important;
+            background-color: #faffcc !important;
+            font-weight: 600;
+            border-left: 5px solid #EEFF41;
+        }
+        
+        .table-info {
+            background-color: #e1f5fe !important;
+            border-left: 5px solid var(--accent5);
+        }
+        
+        .table-danger:hover, .table-warning:hover, .table-info:hover {
+            opacity: 0.88;
+        }
+        
+        .table-dark {
+            background: linear-gradient(135deg, var(--accent1) 0%, var(--accent5) 100%) !important;
+            color: var(--lt1);
+        }
+        
+        .table-dark th {
+            border: none !important;
+            padding: 16px !important;
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.85rem;
+            letter-spacing: 0.8px;
+        }
+        
+        .modal-header {
+            background: linear-gradient(135deg, var(--accent1) 0%, var(--accent5) 100%);
+            color: var(--lt1);
+            border-radius: 16px 16px 0 0;
+        }
+        
+        .modal-header .btn-close {
+            filter: brightness(0) invert(1);
+        }
+        
+        .modal-content {
+            border-radius: 16px;
+            border: none;
+            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.2);
+        }
+        
+        .badge.bg-danger {
+            background: #f44336 !important;
+        }
+        
+        .badge.bg-warning {
+            background: #EEFF41 !important;
+            color: var(--dk1) !important;
             font-weight: 600;
         }
-        .table-info {
-            background-color: #d1ecf1 !important;
+        
+        .badge.bg-info {
+            background: var(--accent5) !important;
         }
-        .table-danger:hover, .table-warning:hover, .table-info:hover {
-            opacity: 0.9;
+        
+        .badge.bg-success {
+            background: #4CAF50 !important;
+        }
+        
+        /* Animações */
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .card-custom, .kpi-card {
+            animation: slideIn 0.5s ease-out;
+        }
+        
+        /* Scrollbar personalizada */
+        ::-webkit-scrollbar {
+            width: 10px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: var(--lt2);
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: var(--accent3);
+            border-radius: 5px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--accent5);
         }
     </style>
 </head>
