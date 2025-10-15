@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Licenciamento Microsoft (Com Filtros)</title>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    
+    <!-- SheetJS para ler Excel -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
+    
+    <style>
+        body {
+            background-color: #f8f9fa;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .dashboard-header {
+            background: linear-gradient(135deg, #0078D4 0%, #0063B1 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .kpi-card {
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            transition: transform 0.2s;
+            height: 100%;
+        }
+        .kpi-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        }
+        .chart-container {
+            position: relative;
+            height: 400px;
+            margin-bottom: 20px;
+        }
+        .card-custom {
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .file-input-area {
+            border: 2px dashed #0078D4;
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .file-input-area:hover {
+            background-color: #e7f3ff;
+            border-color: #0063B1;
+        }
+        .loading {
+            display: none;
+        }
+        .spinner-border {
+            width: 3rem;
+            height: 3rem;
+        }
+        .filter-section {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+        }
+        .filter-label {
+            font-weight: 600;
+            color: #0078D4;
+            margin-bottom: 5px;
+            font-size: 0.9rem;
+        }
+        .btn-filter {
+            background: #0078D4;
+            border: none;
+            color: white;
+        }
+        .btn-filter:hover {
+            background: #0063B1;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid py-4">
+        <!-- Header -->
+        <div class="dashboard-header text-center">
+            <h1 class="mb-2">📊 Dashboard de Licenciamento Microsoft</h1>
+            <p class="mb-0">Análise Completa de Licenças e Custos com Filtros Interativos</p>
+        </div>
+        
+        <!-- File Input -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card card-custom">
+                    <div class="card-body">
+                        <div class="file-input-area" onclick="document.getElementById('fileInput').click()">
+                            <h5>📁 Clique aqui ou arraste a planilha Excel</h5>
+                            <p class="text-muted mb-0">Arquivo: LICENCIAMENTO MICROSOFT (1).xlsx</p>
+                            <input type="file" id="fileInput" accept=".xlsx,.xls" style="display: none;">
+                        </div>
+                        <div class="text-center mt-3 loading" id="loading">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Carregando...</span>
+                            </div>
+                            <p class="mt-2">Processando dados...</p>
+                        </div>
+                        <div class="alert alert-info mt-3" id="lastUpdate" style="display: none;">
+                            <strong>Última atualização:</strong> <span id="updateTime"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Filtros -->
+        <div class="filter-section" id="filterSection" style="display: none;">
+            <h5 class="mb-3">🔍 Filtros</h5>
+            <div class="row">
+                <div class="col-md-2">
+                    <label class="filter-label">Empresa</label>
+                    <select id="filterEmpresa" class="form-select form-select-sm">
+                        <option value="">Todas</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="filter-label">Estado</label>
+                    <select id="filterEstado" class="form-select form-select-sm">
+                        <option value="">Todos</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="filter-label">Setor</label>
+                    <select id="filterSetor" class="form-select form-select-sm">
+                        <option value="">Todos</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="filter-label">Centro de Custo</label>
+                    <select id="filterCentroCusto" class="form-select form-select-sm">
+                        <option value="">Todos</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="filter-label">Licença</label>
+                    <select id="filterLicenca" class="form-select form-select-sm">
+                        <option value="">Todas</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="filter-label">Modalidade</label>
+                    <select id="filterModalidade" class="form-select form-select-sm">
+                        <option value="">Todas</option>
+                    </select>
+                </div>
+            </div>
+            <div class="row mt-3">
+                <div class="col-12 text-end">
+                    <button class="btn btn-filter" onclick="applyFilters()">🔍 Aplicar Filtros</button>
+                    <button class="btn btn-secondary" onclick="clearFilters()">🔄 Limpar Filtros</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- KPI Cards -->
+        <div class="row mb-4" id="kpiSection" style="display: none;">
+            <div class="col-md-3 mb-3">
+                <div class="card kpi-card bg-success text-white">
+                    <div class="card-body text-center">
+                        <h6 class="card-title">💰 Gasto Total</h6>
+                        <h2 class="mb-0" id="totalGasto">R$ 0,00</h2>
+                        <small>Total investido em licenças</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="card kpi-card bg-primary text-white">
+                    <div class="card-body text-center">
+                        <h6 class="card-title">👥 Total de Usuários</h6>
+                        <h2 class="mb-0" id="totalUsuarios">0</h2>
+                        <small>Usuários com licenças</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="card kpi-card bg-info text-white">
+                    <div class="card-body text-center">
+                        <h6 class="card-title">🏢 Empresas</h6>
+                        <h2 class="mb-0" id="totalEmpresas">0</h2>
+                        <small>Empresas cadastradas</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="card kpi-card bg-warning text-white">
+                    <div class="card-body text-center">
+                        <h6 class="card-title">📋 Licenças</h6>
+                        <h2 class="mb-0" id="totalLicencas">0</h2>
+                        <small>Total de licenças ativas</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Charts Row 1 -->
+        <div class="row" id="chartsSection" style="display: none;">
+            <div class="col-md-6 mb-4">
+                <div class="card card-custom">
+                    <div class="card-body">
+                        <h5 class="card-title">💼 Top 15 Empresas por Gasto</h5>
+                        <div class="chart-container">
+                            <canvas id="chartEmpresas"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6 mb-4">
+                <div class="card card-custom">
+                    <div class="card-body">
+                        <h5 class="card-title">🗺️ Distribuição por Estado</h5>
+                        <div class="chart-container">
+                            <canvas id="chartEstados"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Charts Row 2 -->
+        <div class="row" id="chartsSection2" style="display: none;">
+            <div class="col-md-12 mb-4">
+                <div class="card card-custom">
+                    <div class="card-body">
+                        <h5 class="card-title">🏦 Top 10 Centros de Custo (Maior Gasto)</h5>
+                        <div class="chart-container">
+                            <canvas id="chartCentroCusto"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Charts Row 3 -->
+        <div class="row" id="chartsSection3" style="display: none;">
+            <div class="col-md-6 mb-4">
+                <div class="card card-custom">
+                    <div class="card-body">
+                        <h5 class="card-title">📊 Top 10 Licenças Mais Usadas</h5>
+                        <div class="chart-container">
+                            <canvas id="chartLicencas"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6 mb-4">
+                <div class="card card-custom">
+                    <div class="card-body">
+                        <h5 class="card-title">💳 Gastos por Modalidade</h5>
+                        <div class="chart-container">
+                            <canvas id="chartModalidade"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Charts Row 4 -->
+        <div class="row" id="chartsSection4" style="display: none;">
+            <div class="col-md-6 mb-4">
+                <div class="card card-custom">
+                    <div class="card-body">
+                        <h5 class="card-title">🏢 Gastos por Setor</h5>
+                        <div class="chart-container">
+                            <canvas id="chartSetor"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6 mb-4">
+                <div class="card card-custom">
+                    <div class="card-body">
+                        <h5 class="card-title">🔄 Distribuição por Fornecedor</h5>
+                        <div class="chart-container">
+                            <canvas id="chartFaturador"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Tabela -->
+        <div class="row" id="tableSection" style="display: none;">
+            <div class="col-12 mb-4">
+                <div class="card card-custom">
+                    <div class="card-body">
+                        <h5 class="card-title">📋 Detalhamento Completo (50 primeiros registros)</h5>
+                        <div class="table-responsive">
+                            <table class="table table-striped table-hover" id="dataTable">
+                                <thead class="table-dark">
+                                    <tr>
+                                        <th>Empresa</th>
+                                        <th>Colaborador</th>
+                                        <th>E-mail</th>
+                                        <th>Licença</th>
+                                        <th>Centro de Custo</th>
+                                        <th>Estado</th>
+                                        <th>Quantidade</th>
+                                        <th>Total (R$)</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tableBody">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        let charts = {};
+        let originalData = [];
+        let filteredData = [];
+        
+        // Configuração do input de arquivo
+        const fileInput = document.getElementById('fileInput');
+        fileInput.addEventListener('change', handleFile);
+        
+        // Drag and drop
+        const dropArea = document.querySelector('.file-input-area');
+        dropArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropArea.style.backgroundColor = '#e7f3ff';
+        });
+        dropArea.addEventListener('dragleave', () => {
+            dropArea.style.backgroundColor = '';
+        });
+        dropArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropArea.style.backgroundColor = '';
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                fileInput.files = files;
+                handleFile();
+            }
+        });
+        
+        function handleFile() {
+            const file = fileInput.files[0];
+            if (!file) return;
+            
+            document.getElementById('loading').style.display = 'block';
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, {type: 'array'});
+                    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const jsonData = XLSX.utils.sheet_to_json(firstSheet);
+                    
+                    processData(jsonData);
+                    
+                    document.getElementById('loading').style.display = 'none';
+                    document.getElementById('lastUpdate').style.display = 'block';
+                    document.getElementById('updateTime').textContent = new Date().toLocaleString('pt-BR');
+                } catch (error) {
+                    console.error('Erro ao processar arquivo:', error);
+                    alert('Erro ao processar o arquivo. Verifique se é um arquivo Excel válido.');
+                    document.getElementById('loading').style.display = 'none';
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+        
+        function processData(data) {
+            // Processar dados
+            originalData = data.map(row => ({
+                empresa: row['Empresa'] || '',
+                colaborador: row['Nome do colaborador'] || '',
+                email: row['e-mail'] || '',
+                setor: row['setor'] || '',
+                centroCusto: row['Centro de Custo'] || '',
+                estado: row['estado'] || '',
+                licenca: row['licenca'] || '',
+                modalidade: row['Modalidade da licença'] || '',
+                valorUnitario: parseFloat(row['valor unitario']) || 0,
+                quantidade: parseFloat(row['quantidade de licenças']) || 0,
+                total: parseFloat(row['total']) || (parseFloat(row['valor unitario']) || 0) * (parseFloat(row['quantidade de licenças']) || 0),
+                faturador: row['faturador'] || ''
+            }));
+            
+            filteredData = [...originalData];
+            
+            populateFilters();
+            updateDashboard(filteredData);
+            
+            // Mostrar seções
+            document.getElementById('filterSection').style.display = 'block';
+            document.getElementById('kpiSection').style.display = 'flex';
+            document.getElementById('chartsSection').style.display = 'flex';
+            document.getElementById('chartsSection2').style.display = 'flex';
+            document.getElementById('chartsSection3').style.display = 'flex';
+            document.getElementById('chartsSection4').style.display = 'flex';
+            document.getElementById('tableSection').style.display = 'block';
+        }
+        
+        function populateFilters() {
+            // Preencher dropdowns de filtros
+            const empresas = [...new Set(originalData.map(d => d.empresa))].sort();
+            const estados = [...new Set(originalData.map(d => d.estado))].sort();
+            const setores = [...new Set(originalData.map(d => d.setor))].sort();
+            const centrosCusto = [...new Set(originalData.map(d => d.centroCusto))].sort();
+            const licencas = [...new Set(originalData.map(d => d.licenca))].sort();
+            const modalidades = [...new Set(originalData.map(d => d.modalidade))].sort();
+            
+            populateSelect('filterEmpresa', empresas);
+            populateSelect('filterEstado', estados);
+            populateSelect('filterSetor', setores);
+            populateSelect('filterCentroCusto', centrosCusto);
+            populateSelect('filterLicenca', licencas);
+            populateSelect('filterModalidade', modalidades);
+        }
+        
+        function populateSelect(id, options) {
+            const select = document.getElementById(id);
+            select.innerHTML = '<option value="">Todos/Todas</option>';
+            options.forEach(opt => {
+                if (opt) {
+                    const option = document.createElement('option');
+                    option.value = opt;
+                    option.textContent = opt;
+                    select.appendChild(option);
+                }
+            });
+        }
+        
+        function applyFilters() {
+            const empresa = document.getElementById('filterEmpresa').value;
+            const estado = document.getElementById('filterEstado').value;
+            const setor = document.getElementById('filterSetor').value;
+            const centroCusto = document.getElementById('filterCentroCusto').value;
+            const licenca = document.getElementById('filterLicenca').value;
+            const modalidade = document.getElementById('filterModalidade').value;
+            
+            filteredData = originalData.filter(row => {
+                return (!empresa || row.empresa === empresa) &&
+                       (!estado || row.estado === estado) &&
+                       (!setor || row.setor === setor) &&
+                       (!centroCusto || row.centroCusto === centroCusto) &&
+                       (!licenca || row.licenca === licenca) &&
+                       (!modalidade || row.modalidade === modalidade);
+            });
+            
+            updateDashboard(filteredData);
+        }
+        
+        function clearFilters() {
+            document.getElementById('filterEmpresa').value = '';
+            document.getElementById('filterEstado').value = '';
+            document.getElementById('filterSetor').value = '';
+            document.getElementById('filterCentroCusto').value = '';
+            document.getElementById('filterLicenca').value = '';
+            document.getElementById('filterModalidade').value = '';
+            
+            filteredData = [...originalData];
+            updateDashboard(filteredData);
+        }
+        
+        function updateDashboard(data) {
+            updateKPIs(data);
+            createCharts(data);
+            createTable(data);
+        }
+        
+        function updateKPIs(data) {
+            const totalGasto = data.reduce((sum, row) => sum + row.total, 0);
+            const totalUsuarios = data.length;
+            const empresasUnicas = new Set(data.map(row => row.empresa)).size;
+            const totalLicencas = data.reduce((sum, row) => sum + row.quantidade, 0);
+            
+            document.getElementById('totalGasto').textContent = 
+                'R$ ' + totalGasto.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            document.getElementById('totalUsuarios').textContent = totalUsuarios.toLocaleString('pt-BR');
+            document.getElementById('totalEmpresas').textContent = empresasUnicas;
+            document.getElementById('totalLicencas').textContent = totalLicencas.toLocaleString('pt-BR');
+        }
+        
+        function createCharts(data) {
+            // Destruir gráficos anteriores
+            Object.values(charts).forEach(chart => chart.destroy());
+            charts = {};
+            
+            // 1. Gráfico de Empresas
+            const empresasData = {};
+            data.forEach(row => {
+                empresasData[row.empresa] = (empresasData[row.empresa] || 0) + row.total;
+            });
+            const topEmpresas = Object.entries(empresasData)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 15);
+            
+            charts.empresas = new Chart(document.getElementById('chartEmpresas'), {
+                type: 'bar',
+                data: {
+                    labels: topEmpresas.map(e => e[0]),
+                    datasets: [{
+                        label: 'Gasto Total (R$)',
+                        data: topEmpresas.map(e => e[1]),
+                        backgroundColor: 'rgba(0, 120, 212, 0.7)',
+                        borderColor: 'rgba(0, 120, 212, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    }
+                }
+            });
+            
+            // 2. Gráfico de Estados
+            const estadosData = {};
+            data.forEach(row => {
+                estadosData[row.estado] = (estadosData[row.estado] || 0) + row.total;
+            });
+            
+            charts.estados = new Chart(document.getElementById('chartEstados'), {
+                type: 'doughnut',
+                data: {
+                    labels: Object.keys(estadosData),
+                    datasets: [{
+                        data: Object.values(estadosData),
+                        backgroundColor: [
+                            'rgba(255, 99, 132, 0.7)',
+                            'rgba(54, 162, 235, 0.7)',
+                            'rgba(255, 206, 86, 0.7)',
+                            'rgba(75, 192, 192, 0.7)',
+                            'rgba(153, 102, 255, 0.7)',
+                            'rgba(255, 159, 64, 0.7)'
+                        ]
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false
+                }
+            });
+            
+            // 3. Centro de Custo
+            const centroCustoData = {};
+            data.forEach(row => {
+                centroCustoData[row.centroCusto] = (centroCustoData[row.centroCusto] || 0) + row.total;
+            });
+            const topCentroCusto = Object.entries(centroCustoData)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 10);
+            
+            charts.centroCusto = new Chart(document.getElementById('chartCentroCusto'), {
+                type: 'bar',
+                data: {
+                    labels: topCentroCusto.map(e => e[0]),
+                    datasets: [{
+                        label: 'Gasto Total (R$)',
+                        data: topCentroCusto.map(e => e[1]),
+                        backgroundColor: 'rgba(220, 53, 69, 0.7)',
+                        borderColor: 'rgba(220, 53, 69, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    }
+                }
+            });
+            
+            // 4. Licenças
+            const licencasData = {};
+            data.forEach(row => {
+                licencasData[row.licenca] = (licencasData[row.licenca] || 0) + row.quantidade;
+            });
+            const topLicencas = Object.entries(licencasData)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 10);
+            
+            charts.licencas = new Chart(document.getElementById('chartLicencas'), {
+                type: 'bar',
+                data: {
+                    labels: topLicencas.map(e => e[0]),
+                    datasets: [{
+                        label: 'Quantidade',
+                        data: topLicencas.map(e => e[1]),
+                        backgroundColor: 'rgba(40, 167, 69, 0.7)',
+                        borderColor: 'rgba(40, 167, 69, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    }
+                }
+            });
+            
+            // 5. Modalidade
+            const modalidadeData = {};
+            data.forEach(row => {
+                modalidadeData[row.modalidade] = (modalidadeData[row.modalidade] || 0) + row.total;
+            });
+            
+            charts.modalidade = new Chart(document.getElementById('chartModalidade'), {
+                type: 'pie',
+                data: {
+                    labels: Object.keys(modalidadeData),
+                    datasets: [{
+                        data: Object.values(modalidadeData),
+                        backgroundColor: [
+                            'rgba(255, 99, 132, 0.7)',
+                            'rgba(54, 162, 235, 0.7)',
+                            'rgba(255, 206, 86, 0.7)',
+                            'rgba(75, 192, 192, 0.7)'
+                        ]
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false
+                }
+            });
+            
+            // 6. Setor
+            const setorData = {};
+            data.forEach(row => {
+                setorData[row.setor] = (setorData[row.setor] || 0) + row.total;
+            });
+            const topSetor = Object.entries(setorData)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 15);
+            
+            charts.setor = new Chart(document.getElementById('chartSetor'), {
+                type: 'bar',
+                data: {
+                    labels: topSetor.map(e => e[0]),
+                    datasets: [{
+                        label: 'Gasto Total (R$)',
+                        data: topSetor.map(e => e[1]),
+                        backgroundColor: 'rgba(111, 66, 193, 0.7)',
+                        borderColor: 'rgba(111, 66, 193, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    }
+                }
+            });
+            
+            // 7. Faturador
+            const faturadorData = {};
+            data.forEach(row => {
+                if (row.faturador) {
+                    faturadorData[row.faturador] = (faturadorData[row.faturador] || 0) + row.total;
+                }
+            });
+            
+            charts.faturador = new Chart(document.getElementById('chartFaturador'), {
+                type: 'doughnut',
+                data: {
+                    labels: Object.keys(faturadorData),
+                    datasets: [{
+                        data: Object.values(faturadorData),
+                        backgroundColor: [
+                            'rgba(255, 99, 132, 0.7)',
+                            'rgba(54, 162, 235, 0.7)',
+                            'rgba(255, 206, 86, 0.7)',
+                            'rgba(75, 192, 192, 0.7)',
+                            'rgba(153, 102, 255, 0.7)'
+                        ]
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false
+                }
+            });
+        }
+        
+        function createTable(data) {
+            const tbody = document.getElementById('tableBody');
+            tbody.innerHTML = '';
+            
+            data.slice(0, 50).forEach(row => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${row.empresa}</td>
+                    <td>${row.colaborador}</td>
+                    <td>${row.email}</td>
+                    <td>${row.licenca}</td>
+                    <td>${row.centroCusto}</td>
+                    <td>${row.estado}</td>
+                    <td>${row.quantidade}</td>
+                    <td>R$ ${row.total.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+    </script>
+</body>
+</html>

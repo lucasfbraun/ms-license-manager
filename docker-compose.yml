@@ -1,0 +1,19 @@
+services:
+  dashboard:
+    build: .
+    container_name: licenciamento-microsoft-dashboard
+    ports:
+      - "5000:5000"
+    volumes:
+      # Mapear a planilha para poder atualizar sem rebuild
+      - ./LICENCIAMENTO MICROSOFT (1).xlsx:/app/LICENCIAMENTO MICROSOFT (1).xlsx
+    environment:
+      - FLASK_ENV=production
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
+    networks:
+      - dashboard-network
+
+networks:
+  dashboard-network:
+    driver: bridge
