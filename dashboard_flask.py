@@ -241,8 +241,8 @@ def gerar_tabela_contratos(df):
             <thead class="table-dark">
                 <tr>
                     <th style="width: 70px; text-align: center;">
-                        <div style="font-size: 0.75rem; margin-bottom: 5px;">Selecionar</div>
-                        <input type="checkbox" id="checkAllContratos" class="form-check-input" style="width: 20px; height: 20px; cursor: pointer;">
+                        <div style="font-size: 0.75rem; margin-bottom: 5px; color: var(--title-color);">Selecionar</div>
+                        <input type="checkbox" id="checkAllContratos" class="form-check-input">
                     </th>
                     <th>Status</th>
                     <th>Empresa</th>
@@ -253,7 +253,6 @@ def gerar_tabela_contratos(df):
                     <th>Dias Restantes</th>
                     <th>Qtd</th>
                     <th>Valor Total</th>
-                    <th>Rateio</th>
                 </tr>
             </thead>
             <tbody>
@@ -293,9 +292,6 @@ def gerar_tabela_contratos(df):
             inicio_formatado = inicio.strftime('%d/%m/%Y') if pd.notna(inicio) else 'N/A'
             fim_formatado = fim.strftime('%d/%m/%Y') if pd.notna(fim) else 'N/A'
             total_formatado = f"R$ {total:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
-            
-            # URL de exportação CSV (rateio por contrato)
-            rateio_url = f"/api/rateio_contrato?empresa={quote(str(empresa))}&licenca={quote(str(licenca))}&modalidade={quote(str(modalidade))}"
 
             html += f'''
                 <tr class="{row_class}">
@@ -303,8 +299,7 @@ def gerar_tabela_contratos(df):
                         <input type="checkbox" class="contrato-checkbox form-check-input" 
                                data-empresa="{empresa}" 
                                data-licenca="{licenca}" 
-                               data-modalidade="{modalidade}"
-                               style="width: 20px; height: 20px; cursor: pointer;">
+                               data-modalidade="{modalidade}">
                     </td>
                     <td><strong>{status}</strong></td>
                     <td><strong>{empresa}</strong></td>
@@ -315,11 +310,6 @@ def gerar_tabela_contratos(df):
                     <td><strong>{dias_texto}</strong></td>
                     <td>{int(qtd_licencas)}</td>
                     <td>{total_formatado}</td>
-                    <td>
-                        <a class="btn btn-sm btn-outline-primary" href="{rateio_url}" target="_blank" rel="noopener" download>
-                            Exportar CSV
-                        </a>
-                    </td>
                 </tr>
             '''
     
@@ -827,6 +817,64 @@ HTML_TEMPLATE = '''
         
         ::-webkit-scrollbar-thumb:hover {
             background: #7FB88A;
+        }
+        
+        /* Estilo personalizado para checkboxes - Paleta de cores do dashboard */
+        .contrato-checkbox.form-check-input,
+        #checkAllContratos.form-check-input {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+            border: 2px solid var(--primary);
+            border-radius: 4px;
+            transition: all 0.2s ease;
+            background-color: #FFFFFF;
+            --bs-form-check-bg-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3e%3cpath fill='none' stroke='%23FFFFFF' stroke-linecap='round' stroke-linejoin='round' stroke-width='3' d='m6 10 3 3 6-6'/%3e%3c/svg%3e");
+        }
+        
+        .contrato-checkbox.form-check-input:hover,
+        #checkAllContratos.form-check-input:hover {
+            border-color: var(--accent-light);
+            box-shadow: 0 0 8px rgba(96, 147, 105, 0.3);
+        }
+        
+        .contrato-checkbox.form-check-input:checked,
+        #checkAllContratos.form-check-input:checked {
+            background-color: #609369 !important;
+            border-color: #609369 !important;
+            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3e%3cpath fill='none' stroke='%23FFFFFF' stroke-linecap='round' stroke-linejoin='round' stroke-width='3' d='m6 10 3 3 6-6'/%3e%3c/svg%3e") !important;
+        }
+        
+        .contrato-checkbox.form-check-input:checked:hover,
+        #checkAllContratos.form-check-input:checked:hover {
+            background-color: #7FB88A !important;
+            border-color: #7FB88A !important;
+        }
+        
+        .contrato-checkbox.form-check-input:focus,
+        #checkAllContratos.form-check-input:focus {
+            border-color: #609369 !important;
+            box-shadow: 0 0 0 0.25rem rgba(96, 147, 105, 0.25) !important;
+            outline: none !important;
+        }
+        
+        .contrato-checkbox.form-check-input:active,
+        #checkAllContratos.form-check-input:active {
+            border-color: #609369 !important;
+            background-color: #7FB88A !important;
+        }
+        
+        .contrato-checkbox.form-check-input:checked:focus,
+        #checkAllContratos.form-check-input:checked:focus {
+            background-color: #609369 !important;
+            border-color: #609369 !important;
+            box-shadow: 0 0 0 0.25rem rgba(96, 147, 105, 0.25) !important;
+        }
+        
+        .contrato-checkbox.form-check-input:checked:active,
+        #checkAllContratos.form-check-input:checked:active {
+            background-color: #7FB88A !important;
+            border-color: #7FB88A !important;
         }
         
         .table {
