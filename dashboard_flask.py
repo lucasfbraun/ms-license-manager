@@ -1045,42 +1045,179 @@ HTML_TEMPLATE = '''
                 })
                 .then(data => {
                     console.log('Dados recebidos de /api/usuarios:', data);
-                    let html = `
-                        <div class="alert alert-info">
-                            <strong>Total de usuários com esta licença: ${data.total_usuarios}</strong>
-                        </div>
-                    `;
+                    let html = '';
+                    const hasUsers = Array.isArray(data.usuarios) && data.usuarios.length > 0;
+                    const usuariosData = hasUsers ? data.usuarios : [];
                     
-                    if (data.usuarios.length === 0) {
+                    // Derivar chips (Empresa, Setor, Estado)
+                    const uniq = (arr) => Array.from(new Set(arr.filter(v => v != null && v !== ''))).sort();
+                    const empresas = uniq(usuariosData.map(u => u['Empresa']));
+                    const setores = uniq(usuariosData.map(u => u['Setor']));
+                    const estados = uniq(usuariosData.map(u => u['Estado']));
+                    
+                    // Estado do filtro e paginação
+                    let filtroTexto = '';
+                    let filtroEmpresa = null;
+                    let filtroSetor = null;
+                    let filtroEstado = null;
+                    let pagina = 1;
+                    const porPagina = 10;
+
+                    html += `
+                        <div class="d-flex align-items-center justify-content-between mb-3">
+                            <div class="alert alert-info mb-0">
+                                <strong>Total de usuários com esta licença: ${data.total_usuarios}</strong>
+                            </div>
+                            <div class="input-group" style="max-width: 360px;">
+                                <input type="text" id="usuarios-search" class="form-control form-control-sm" placeholder="Pesquisar usuário, email, empresa..." ${hasUsers ? '' : 'disabled'}>
+                                <button class="btn btn-outline-secondary btn-sm" id="usuarios-clear" type="button" ${hasUsers ? '' : 'disabled'}>Limpar</button>
+                            </div>
+                        </div>
+                        
+                        ${hasUsers ? `
+                        <div class="mb-3">
+                            <div class="d-flex flex-wrap gap-2 align-items-center">
+                                <span class="text-muted small me-2">Filtros rápidos:</span>
+                                <div id="chips-empresa" class="d-flex flex-wrap gap-2"></div>
+                                <div id="chips-setor" class="d-flex flex-wrap gap-2"></div>
+                                <div id="chips-estado" class="d-flex flex-wrap gap-2"></div>
+                                <button class="btn btn-sm btn-outline-secondary" id="chips-clear">Limpar filtros</button>
+                            </div>
+                        </div>
+                        ` : ''}
+                    `;
+
+                    if (!hasUsers) {
                         html += '<p class="text-muted">Nenhum usuário encontrado para esta licença.</p>';
                     } else {
-                        data.usuarios.forEach(usuario => {
-                            html += `
+                        html += '<div id="usuariosList"></div>';
+                        html += '<div id="usuariosPagination" class="d-flex justify-content-between align-items-center mt-3"></div>';
+                    }
+
+                    const modalBody = document.getElementById('modalBody');
+                    modalBody.innerHTML = html;
+
+                    // Filtro + chips + paginação
+                    if (hasUsers) {
+                        const input = document.getElementById('usuarios-search');
+                        const clearBtn = document.getElementById('usuarios-clear');
+                        const chipsEmpresa = document.getElementById('chips-empresa');
+                        const chipsSetor = document.getElementById('chips-setor');
+                        const chipsEstado = document.getElementById('chips-estado');
+                        const chipsClear = document.getElementById('chips-clear');
+                        const listEl = document.getElementById('usuariosList');
+                        const pagerEl = document.getElementById('usuariosPagination');
+
+                        const renderChips = (items, container, kind) => {
+                            if (!container) return;
+                            container.innerHTML = items.map(val => `
+                                <button type="button" class="btn btn-sm ${kind}-chip ${kind}-chip-item btn-outline-primary" data-value="${String(val)}">
+                                    ${String(val)}
+                                </button>
+                            `).join('');
+                            container.querySelectorAll(`.${kind}-chip-item`).forEach(btn => {
+                                btn.addEventListener('click', () => {
+                                    const value = btn.getAttribute('data-value');
+                                    if (kind === 'empresa') filtroEmpresa = (filtroEmpresa === value ? null : value);
+                                    if (kind === 'setor') filtroSetor = (filtroSetor === value ? null : value);
+                                    if (kind === 'estado') filtroEstado = (filtroEstado === value ? null : value);
+                                    pagina = 1;
+                                    update();
+                                });
+                            });
+                        };
+
+                        const filtrar = () => {
+                            const termo = (filtroTexto || '').toLowerCase();
+                            return usuariosData.filter(u => {
+                                const texto = [u['Colaborador'], u['Email'], u['Empresa'], u['Setor'], u['Estado'], u['Centro de Custo']]
+                                    .map(x => (x || '').toString().toLowerCase()).join(' ');
+                                if (termo && !texto.includes(termo)) return false;
+                                if (filtroEmpresa && u['Empresa'] !== filtroEmpresa) return false;
+                                if (filtroSetor && u['Setor'] !== filtroSetor) return false;
+                                if (filtroEstado && u['Estado'] !== filtroEstado) return false;
+                                return true;
+                            });
+                        };
+
+                        const renderList = (arr) => {
+                            listEl.innerHTML = arr.map(usuario => `
                                 <div class="user-card">
                                     <div class="row">
                                         <div class="col-md-8">
-                                            <h6 class="mb-1"><strong>${usuario['Colaborador'] || usuario.colaborador || ''}</strong></h6>
+                                            <h6 class="mb-1"><strong>${usuario['Colaborador'] || ''}</strong></h6>
                                             <p class="mb-1 text-muted small">
-                                                📧 ${usuario['Email'] || usuario.email || 'Sem email'}<br>
-                                                🏢 ${usuario['Empresa'] || usuario.empresa || ''}<br>
-                                                🏭 Setor: ${usuario['Setor'] || usuario.setor || ''}<br>
-                                                🗺️ Estado: ${usuario['Estado'] || usuario.estado || ''}<br>
-                                                🏦 Centro de Custo: ${usuario['Centro de Custo'] || usuario.centro_custo || ''}
+                                                📧 ${usuario['Email'] || 'Sem email'}<br>
+                                                🏢 ${usuario['Empresa'] || ''}<br>
+                                                🏭 Setor: ${usuario['Setor'] || ''}<br>
+                                                🗺️ Estado: ${usuario['Estado'] || ''}<br>
+                                                🏦 Centro de Custo: ${usuario['Centro de Custo'] || ''}
                                             </p>
                                         </div>
                                         <div class="col-md-4 text-end">
                                             <p class="mb-1"><strong>Criação:</strong> ${usuario['Data de Criação'] || ''}</p>
-                                            <p class="mb-1"><strong>Qtd:</strong> ${usuario['Quantidade'] ?? usuario.quantidade ?? ''}</p>
-                                            <p class="mb-1"><strong>Valor Unit:</strong> R$ ${(usuario['Valor Unitário'] ?? usuario.valor_unitario ?? 0).toFixed ? (usuario['Valor Unitário'] ?? usuario.valor_unitario).toFixed(2) : Number(usuario['Valor Unitário'] ?? usuario.valor_unitario ?? 0).toFixed(2)}</p>
-                                            <p class="mb-0"><strong>Total:</strong> R$ ${(usuario['Total'] ?? usuario.total ?? 0).toFixed ? (usuario['Total'] ?? usuario.total).toFixed(2) : Number(usuario['Total'] ?? usuario.total ?? 0).toFixed(2)}</p>
+                                            <p class="mb-1"><strong>Qtd:</strong> ${usuario['Quantidade'] ?? ''}</p>
+                                            <p class="mb-1"><strong>Valor Unit:</strong> R$ ${Number(usuario['Valor Unitário'] ?? 0).toFixed(2)}</p>
+                                            <p class="mb-0"><strong>Total:</strong> R$ ${Number(usuario['Total'] ?? 0).toFixed(2)}</p>
                                         </div>
                                     </div>
                                 </div>
+                            `).join('');
+                        };
+
+                        const renderPager = (total, page, perPage) => {
+                            const totalPages = Math.max(1, Math.ceil(total / perPage));
+                            const prevDisabled = page <= 1 ? 'disabled' : '';
+                            const nextDisabled = page >= totalPages ? 'disabled' : '';
+                            pagerEl.innerHTML = `
+                                <div class="small text-muted">Exibindo página ${page} de ${totalPages} (total ${total} usuários)</div>
+                                <div>
+                                    <button class="btn btn-sm btn-outline-secondary me-2" id="usuarios-prev" ${prevDisabled}>Anterior</button>
+                                    <button class="btn btn-sm btn-outline-secondary" id="usuarios-next" ${nextDisabled}>Próxima</button>
+                                </div>
                             `;
+                            const prev = document.getElementById('usuarios-prev');
+                            const next = document.getElementById('usuarios-next');
+                            if (prev) prev.onclick = () => { if (pagina > 1) { pagina--; update(); } };
+                            if (next) next.onclick = () => { pagina++; update(); };
+                        };
+
+                        const update = () => {
+                            filtroTexto = (input.value || '');
+                            const filtrados = filtrar();
+                            const total = filtrados.length;
+                            const totalPages = Math.max(1, Math.ceil(total / porPagina));
+                            if (pagina > totalPages) pagina = totalPages;
+                            const inicio = (pagina - 1) * porPagina;
+                            const pageArr = filtrados.slice(inicio, inicio + porPagina);
+                            renderList(pageArr);
+                            renderPager(total, pagina, porPagina);
+
+                            // Marcar chips ativos
+                            const toggleActive = (container, kind, current) => {
+                                if (!container) return;
+                                container.querySelectorAll(`.${kind}-chip-item`).forEach(btn => {
+                                    const value = btn.getAttribute('data-value');
+                                    btn.classList.toggle('btn-primary', current === value);
+                                    btn.classList.toggle('btn-outline-primary', current !== value);
+                                });
+                            };
+                            toggleActive(chipsEmpresa, 'empresa', filtroEmpresa);
+                            toggleActive(chipsSetor, 'setor', filtroSetor);
+                            toggleActive(chipsEstado, 'estado', filtroEstado);
+                        };
+
+                        input.addEventListener('input', () => { pagina = 1; update(); });
+                        clearBtn.addEventListener('click', () => { input.value = ''; pagina = 1; update(); input.focus(); });
+                        if (chipsClear) chipsClear.addEventListener('click', () => {
+                            filtroEmpresa = null; filtroSetor = null; filtroEstado = null; pagina = 1; update();
                         });
+
+                        renderChips(empresas, chipsEmpresa, 'empresa');
+                        renderChips(setores, chipsSetor, 'setor');
+                        renderChips(estados, chipsEstado, 'estado');
+                        update();
                     }
-                    
-                    document.getElementById('modalBody').innerHTML = html;
                 })
                 .catch(error => {
                     console.error('Erro ao carregar usuários:', error);
