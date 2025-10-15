@@ -19,6 +19,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copiar código da aplicação
 COPY dashboard_flask.py .
 COPY ["LICENCIAMENTO MICROSOFT (1).xlsx", "."]
+COPY static/ ./static/
 
 # Expor porta 5000
 EXPOSE 5000

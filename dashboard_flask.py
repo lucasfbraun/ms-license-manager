@@ -324,6 +324,23 @@ HTML_TEMPLATE = '''
             border-radius: 0;
             margin-bottom: 40px;
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+            position: relative;
+        }
+        
+        .dashboard-logo {
+            position: absolute;
+            top: 15px;
+            left: 40px;
+            height: 120px;
+            width: auto;
+            filter: brightness(0) invert(1);
+            opacity: 0.95;
+            transition: all 0.3s ease;
+        }
+        
+        .dashboard-logo:hover {
+            opacity: 1;
+            transform: scale(1.05);
         }
         
         .dashboard-header h1 {
@@ -331,17 +348,20 @@ HTML_TEMPLATE = '''
             margin-bottom: 12px;
             font-size: 2.5rem;
             letter-spacing: -0.5px;
+            margin-left: 150px;
         }
         
         .dashboard-header p {
             font-size: 1.2rem;
             opacity: 0.95;
             font-weight: 300;
+            margin-left: 150px;
         }
         
         .dashboard-header small {
             opacity: 0.85;
             font-size: 0.9rem;
+            margin-left: 150px;
         }
         
         .kpi-card {
@@ -638,6 +658,7 @@ HTML_TEMPLATE = '''
     <div class="container-fluid py-4">
         <!-- Header -->
         <div class="dashboard-header text-center">
+            <img src="/static/logo.png" alt="Logo" class="dashboard-logo">
             <h1 class="mb-2">📊 Dashboard de Licenciamento Microsoft</h1>
             <p class="mb-0">Análise Completa de Licenças e Custos</p>
             <small>Última atualização: {{ update_time }}</small>
