@@ -1069,6 +1069,7 @@ HTML_TEMPLATE = '''
                                             </p>
                                         </div>
                                         <div class="col-md-4 text-end">
+                                            <p class="mb-1"><strong>Criação:</strong> ${usuario['Data de Criação'] || ''}</p>
                                             <p class="mb-1"><strong>Qtd:</strong> ${usuario['Quantidade'] ?? usuario.quantidade ?? ''}</p>
                                             <p class="mb-1"><strong>Valor Unit:</strong> R$ ${(usuario['Valor Unitário'] ?? usuario.valor_unitario ?? 0).toFixed ? (usuario['Valor Unitário'] ?? usuario.valor_unitario).toFixed(2) : Number(usuario['Valor Unitário'] ?? usuario.valor_unitario ?? 0).toFixed(2)}</p>
                                             <p class="mb-0"><strong>Total:</strong> R$ ${(usuario['Total'] ?? usuario.total ?? 0).toFixed ? (usuario['Total'] ?? usuario.total).toFixed(2) : Number(usuario['Total'] ?? usuario.total ?? 0).toFixed(2)}</p>
@@ -1140,11 +1141,11 @@ def api_usuarios(licenca):
     
     # Obter lista de usuários
     usuarios = dados_licenca[['nomeColaborador', 'email', 'empresa', 'setor', 'estado', 'Centro de Custo',
-                               'qtdLicenca', 'valorUnitarioMensal', 'valorTotalLicenca']]
+                               'qtdLicenca', 'valorUnitarioMensal', 'valorTotalLicenca', 'DataCriacaoFormatada']]
     
     # Renomear colunas para o formato desejado na resposta
     usuarios = usuarios.rename(columns={
-    'nomeColaborador': 'Colaborador',
+        'nomeColaborador': 'Colaborador',
         'email': 'Email',
         'empresa': 'Empresa',
         'setor': 'Setor',
@@ -1152,8 +1153,31 @@ def api_usuarios(licenca):
         'Centro de Custo': 'Centro de Custo',
         'qtdLicenca': 'Quantidade',
         'valorUnitarioMensal': 'Valor Unitário',
-        'valorTotalLicenca': 'Total'
+        'valorTotalLicenca': 'Total',
+        'DataCriacaoFormatada': 'Data de Criação'
     })
+
+    # Formatar a data para dd/mm/aaaa para JSON
+    if 'Data de Criação' in usuarios.columns:
+        try:
+            usuarios['Data de Criação'] = usuarios['Data de Criação'].apply(
+                lambda x: x.strftime('%d/%m/%Y') if pd.notna(x) and hasattr(x, 'strftime') else (str(x) if pd.notna(x) else None)
+            )
+        except Exception as _:
+            usuarios['Data de Criação'] = usuarios['Data de Criação'].astype(str)
+
+    # Garantir que Total não tenha NaN: usar fallback Valor Unitário * Quantidade quando Total faltar
+    try:
+        if 'Total' in usuarios.columns:
+            usuarios['Valor Unitário'] = pd.to_numeric(usuarios['Valor Unitário'], errors='coerce')
+            usuarios['Quantidade'] = pd.to_numeric(usuarios['Quantidade'], errors='coerce')
+            usuarios['Total'] = pd.to_numeric(usuarios['Total'], errors='coerce')
+            usuarios['Total'] = usuarios['Total'].fillna(usuarios['Valor Unitário'] * usuarios['Quantidade'])
+    except Exception:
+        pass
+
+    # Remover NaN/NaT de todo o DataFrame para JSON válido (vira null no JSON)
+    usuarios = usuarios.where(pd.notna(usuarios), None)
     
     # Converter para lista de dicionários
     usuarios_list = usuarios.to_dict(orient='records')
