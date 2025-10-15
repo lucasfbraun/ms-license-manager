@@ -224,10 +224,26 @@ def gerar_tabela_contratos(df):
     
     # Gerar HTML da tabela
     html = '''
+    <div class="mb-3 d-flex justify-content-between align-items-center">
+        <div>
+            <button id="export_rateio_btn" class="btn btn-success btn-sm" disabled>
+                📥 Exportar Rateio CSV (contratos selecionados)
+            </button>
+            <span class="ms-3 text-muted small" id="sel_count">(0 contratos selecionados)</span>
+        </div>
+        <div>
+            <button id="clear_selection" class="btn btn-outline-secondary btn-sm">Limpar seleção</button>
+        </div>
+    </div>
+    
     <div class="table-responsive">
         <table id="graph_contratos" class="table table-hover table-sm">
             <thead class="table-dark">
                 <tr>
+                    <th style="width: 70px; text-align: center;">
+                        <div style="font-size: 0.75rem; margin-bottom: 5px;">Selecionar</div>
+                        <input type="checkbox" id="checkAllContratos" class="form-check-input" style="width: 20px; height: 20px; cursor: pointer;">
+                    </th>
                     <th>Status</th>
                     <th>Empresa</th>
                     <th>Licença</th>
@@ -283,6 +299,13 @@ def gerar_tabela_contratos(df):
 
             html += f'''
                 <tr class="{row_class}">
+                    <td style="text-align: center;">
+                        <input type="checkbox" class="contrato-checkbox form-check-input" 
+                               data-empresa="{empresa}" 
+                               data-licenca="{licenca}" 
+                               data-modalidade="{modalidade}"
+                               style="width: 20px; height: 20px; cursor: pointer;">
+                    </td>
                     <td><strong>{status}</strong></td>
                     <td><strong>{empresa}</strong></td>
                     <td>{licenca}</td>
@@ -313,6 +336,97 @@ def gerar_tabela_contratos(df):
             <span class="badge bg-success">✅ OK</span> - Vence em mais de 30 dias
         </small>
     </div>
+    
+    <script>
+    (function(){
+        const checkAll = document.getElementById('checkAllContratos');
+        const exportBtn = document.getElementById('export_rateio_btn');
+        const clearBtn = document.getElementById('clear_selection');
+        const selCountEl = document.getElementById('sel_count');
+
+        function updateState() {
+            const checked = Array.from(document.querySelectorAll('.contrato-checkbox:checked'));
+            const count = checked.length;
+            selCountEl.textContent = '(' + count + ' contratos selecionados)';
+            exportBtn.disabled = count === 0;
+            const all = document.querySelectorAll('.contrato-checkbox');
+            if (all.length > 0 && checkAll) {
+                checkAll.checked = checked.length === all.length;
+            }
+        }
+
+        document.addEventListener('change', function(e){
+            if (e.target && e.target.classList && e.target.classList.contains('contrato-checkbox')) {
+                updateState();
+            }
+            if (e.target && e.target.id === 'checkAllContratos') {
+                const checked = e.target.checked;
+                document.querySelectorAll('.contrato-checkbox').forEach(function(cb){ cb.checked = checked; });
+                updateState();
+            }
+        });
+
+        if (clearBtn) {
+            clearBtn.addEventListener('click', function(){
+                document.querySelectorAll('.contrato-checkbox').forEach(function(cb){ cb.checked = false; });
+                if (checkAll) checkAll.checked = false;
+                updateState();
+            });
+        }
+
+        function downloadBlob(blob, filename) {
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+        }
+
+        if (exportBtn) {
+            exportBtn.addEventListener('click', function(){
+                const checked = Array.from(document.querySelectorAll('.contrato-checkbox:checked'));
+                if (checked.length === 0) {
+                    alert('Selecione pelo menos um contrato para exportar.');
+                    return;
+                }
+                const contracts = checked.map(function(cb){
+                    return {
+                        empresa: cb.getAttribute('data-empresa'),
+                        licenca: cb.getAttribute('data-licenca'),
+                        modalidade: cb.getAttribute('data-modalidade')
+                    };
+                });
+                exportBtn.disabled = true;
+                exportBtn.textContent = 'Gerando CSV...';
+                fetch('/api/rateio_contratos', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ contracts: contracts })
+                }).then(function(res){
+                    if (!res.ok) throw new Error('Falha na geração do CSV');
+                    const disposition = res.headers.get('Content-Disposition') || '';
+                    const filenameMatch = /filename="(.+)"/.exec(disposition);
+                    const filename = filenameMatch ? filenameMatch[1] : 'rateio_consolidado.csv';
+                    return res.blob().then(function(blob){ return { blob: blob, filename: filename }; });
+                }).then(function(data){
+                    downloadBlob(data.blob, data.filename);
+                }).catch(function(err){
+                    console.error(err);
+                    alert('Erro ao gerar o CSV: ' + err.message);
+                }).finally(function(){
+                    exportBtn.disabled = false;
+                    exportBtn.textContent = '📥 Exportar Rateio CSV (contratos selecionados)';
+                    updateState();
+                });
+            });
+        }
+
+        updateState();
+    })();
+    </script>
     '''
     
     return html
@@ -1463,6 +1577,104 @@ def api_rateio_contrato():
     if modalidade:
         file_name += f"_{re.sub(r'[^a-zA-Z0-9_-]+', '_', str(modalidade))}"
     file_name += '.csv'
+
+    headers = {
+        'Content-Disposition': f'attachment; filename="{file_name}"',
+        'Content-Type': 'text/csv; charset=utf-8'
+    }
+    return Response(csv_data, headers=headers)
+
+
+@app.route('/api/rateio_contratos', methods=['POST'])
+def api_rateio_contratos():
+    """Gera rateio consolidado para múltiplos contratos selecionados e exporta CSV."""
+    data = request.get_json(silent=True)
+    if not data or 'contracts' not in data or not isinstance(data['contracts'], list) or len(data['contracts']) == 0:
+        return jsonify({'error': 'Nenhum contrato informado'}), 400
+
+    contratos = data['contracts']
+    df = load_data()
+
+    # Construir máscara que combine qualquer um dos contratos fornecidos
+    masks = []
+    for c in contratos:
+        emp = str(c.get('empresa', '')).strip()
+        lic = str(c.get('licenca', '')).strip()
+        mod = str(c.get('modalidade', '')).strip()
+        m = (df['empresa'].astype(str) == emp) & (df['licenca'].astype(str) == lic)
+        if mod:
+            m &= (df['modalidadeLicenca'].astype(str) == mod)
+        masks.append(m)
+
+    if len(masks) == 0:
+        return jsonify({'error': 'Nenhum contrato válido fornecido.'}), 400
+
+    # Combinar máscaras usando OR
+    import functools, operator
+    mask_total = functools.reduce(operator.or_, masks)
+    dados = df[mask_total].copy()
+
+    if dados.empty:
+        return jsonify({'error': 'Nenhum dado encontrado para os contratos selecionados.'}), 404
+
+    # Agrupar por Centro de Custo
+    dados['qtdLicenca'] = pd.to_numeric(dados['qtdLicenca'], errors='coerce').fillna(0)
+    dados['valorTotalLicenca'] = pd.to_numeric(dados['valorTotalLicenca'], errors='coerce').fillna(0)
+    grp = dados.groupby('Centro de Custo', dropna=False).agg({
+        'qtdLicenca': 'sum',
+        'valorTotalLicenca': 'sum'
+    }).reset_index().rename(columns={
+        'Centro de Custo': 'centro_custo',
+        'qtdLicenca': 'qtd_cc',
+        'valorTotalLicenca': 'valor_cc'
+    })
+
+    valor_total = grp['valor_cc'].sum()
+    grp['perc_cc'] = grp['valor_cc'].apply(lambda v: (float(v) / float(valor_total) * 100) if valor_total not in [0, None] else 0.0)
+
+    # Montar saída
+    out = grp.copy()
+    empresas_sel = sorted(list(set([c.get('empresa','') for c in contratos])))
+    licencas_sel = sorted(list(set([c.get('licenca','') for c in contratos])))
+    empresas_label = '|'.join(empresas_sel)
+    licencas_label = '|'.join(licencas_sel)
+    out.insert(0, 'licenca', licencas_label)
+    out.insert(0, 'empresa', empresas_label)
+
+    out = out.rename(columns={
+        'qtd_cc': 'qtd (por centro de custo)',
+        'valor_cc': 'valor por centro de custo',
+        'perc_cc': '% por centro de custo'
+    })
+
+    out = out.sort_values('valor por centro de custo', ascending=False)
+
+    # Formatação
+    def fmt_val(v):
+        try:
+            return (f"{float(v):,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.'))
+        except Exception:
+            return ''
+
+    out_fmt = out.copy()
+    out_fmt['valor por centro de custo'] = out_fmt['valor por centro de custo'].apply(fmt_val)
+    out_fmt['% por centro de custo'] = out_fmt['% por centro de custo'].apply(lambda x: f"{float(x):.2f}".replace('.', ',') if pd.notna(x) else '')
+
+    columns = ['empresa', 'licenca', 'qtd (por centro de custo)', 'centro_custo', 'valor por centro de custo', '% por centro de custo']
+    csv_lines = [';'.join(columns)]
+    for _, row in out_fmt.iterrows():
+        vals = [
+            str(row.get('empresa', '')),
+            str(row.get('licenca', '')),
+            str(int(row.get('qtd (por centro de custo)', 0))) if pd.notna(row.get('qtd (por centro de custo)')) else '0',
+            str(row.get('centro_custo', '')),
+            str(row.get('valor por centro de custo', '')),
+            str(row.get('% por centro de custo', ''))
+        ]
+        csv_lines.append(';'.join(vals))
+
+    csv_data = '\n'.join(csv_lines)
+    file_name = 'rateio_consolidado.csv'
 
     headers = {
         'Content-Disposition': f'attachment; filename="{file_name}"',
