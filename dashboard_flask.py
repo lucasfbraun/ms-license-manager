@@ -51,6 +51,8 @@ def apply_filters(df, filters):
     if filters.get('modalidade') and filters['modalidade'] != 'Todas':
         filtered_df = filtered_df[filtered_df['modalidadeLicenca'] == filters['modalidade']]
     
+
+    
     return filtered_df
 
 def create_graphs(filters=None):
@@ -72,6 +74,7 @@ def create_graphs(filters=None):
     }
     
     # 1. Gastos por Empresa
+
     gastos_empresa = df.groupby('empresa')['valorTotalLicenca'].sum().sort_values(ascending=False).head(15)
     fig1 = px.bar(x=gastos_empresa.values, y=gastos_empresa.index, orientation='h',
                   labels={'x': 'Gasto Total (R$)', 'y': 'Empresa'},
@@ -204,7 +207,7 @@ def gerar_tabela_contratos(df):
     # Gerar HTML da tabela
     html = '''
     <div class="table-responsive">
-        <table class="table table-hover table-sm">
+        <table id="graph_contratos" class="table table-hover table-sm">
             <thead class="table-dark">
                 <tr>
                     <th>Status</th>
@@ -892,7 +895,24 @@ HTML_TEMPLATE = '''
                     <div class="card-body">
                         <h5 class="card-title">📋 Controle de Contratos por Empresa</h5>
                         <p class="text-muted">Acompanhamento de vencimentos e renovações</p>
+                        <div class="mb-3">
+                            <input type="text" id="pesquisa-contratos" class="form-control" placeholder="Pesquisar na tabela...">
+                        </div>
                         {{ graphs.contratos | safe }}
+                        <script>
+                        (function() {
+                            const input = document.getElementById('pesquisa-contratos');
+                            if (input) {
+                                input.addEventListener('keyup', function() {
+                                    const termo = input.value.toLowerCase();
+                                    document.querySelectorAll('#graph_contratos tbody tr').forEach(function(row) {
+                                        const texto = row.textContent.toLowerCase();
+                                        row.style.display = texto.includes(termo) ? '' : 'none';
+                                    });
+                                });
+                            }
+                        })();
+                        </script>
                     </div>
                 </div>
             </div>
@@ -917,32 +937,17 @@ HTML_TEMPLATE = '''
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
                 </div>
-            </div>
-        </div>
-    </div>
-    
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script>
-        // Adicionar botões clicáveis para cada licença
-        document.addEventListener('DOMContentLoaded', function() {
-            // Pegar todas as licenças do gráfico
-            const graph4 = document.getElementById('graph4');
-            if (graph4) {
-                const plotData = graph4.data;
-                if (plotData && plotData.length > 0) {
-                    const licencas = plotData[0].y;
-                    const licencasList = document.getElementById('licencasList');
+                    </div>
                     
-                    licencasList.innerHTML = '<hr><h6>Clique em uma licença abaixo para ver os usuários:</h6>';
-                    licencas.forEach(licenca => {
-                        const badge = document.createElement('span');
-                        badge.className = 'badge bg-primary badge-licenca me-2 mb-2';
-                        badge.style.fontSize = '0.9rem';
-                        badge.style.padding = '8px 12px';
-                        badge.textContent = licenca;
-                        badge.onclick = () => mostrarUsuarios(licenca);
-                        licencasList.appendChild(badge);
-                    });
+                    <div class="col-md-2">
+                        <label class="filter-label">Licença</label>
+                        <select name="licenca" class="form-select form-select-sm">
+                            <option value="Todas" {% if current_filters.licenca == 'Todas' %}selected{% endif %}>Todas</option>
+                            {% for licenca in filter_options.licencas %}
+                            <option value="{{ licenca }}" {% if current_filters.licenca == licenca %}selected{% endif %}>{{ licenca }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
                 }
             }
         });
@@ -960,7 +965,7 @@ HTML_TEMPLATE = '''
             `;
             modal.show();
             
-            // Buscar usuários via API
+                return jsonify({'total_usuarios': total_usuarios, 'usuarios': usuarios_list})
             fetch(`/api/usuarios/${encodeURIComponent(licenca)}`)
                 .then(response => response.json())
                 .then(data => {
@@ -1039,72 +1044,47 @@ def dashboard():
         'modalidades': sorted(df_original['modalidadeLicenca'].dropna().unique())
     }
     
-    # Criar gráficos com filtros aplicados
+    # Criar gráficos e KPIs
     kpis, graphs = create_graphs(filters)
-    update_time = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
     
-    return render_template_string(
-        HTML_TEMPLATE, 
-        kpis=kpis, 
-        graphs=graphs, 
-        update_time=update_time,
-        filter_options=filter_options,
-        current_filters=filters
-    )
+    # Renderizar template
+    return render_template_string(HTML_TEMPLATE, kpis=kpis, graphs=graphs,
+                                  filter_options=filter_options, current_filters=filters,
+                                  update_time=datetime.now().strftime('%d/%m/%Y %H:%M:%S'))
 
-@app.route('/api/usuarios/<path:licenca>')
-def get_usuarios_licenca(licenca):
+@app.route('/api/usuarios/<licenca>', methods=['GET'])
+def api_usuarios(licenca):
     """API para retornar usuários de uma licença específica"""
     df = load_data()
     
-    # Filtrar por licença
-    df_licenca = df[df['licenca'] == licenca]
+    # Filtrar dados pela licença
+    dados_licenca = df[df['licenca'] == licenca]
     
-    # Preparar dados dos usuários
-    usuarios = []
-    for _, row in df_licenca.iterrows():
-        usuarios.append({
-            'colaborador': row['Nome do colaborador'] if pd.notna(row['Nome do colaborador']) else 'Sem nome',
-            'email': row['e-mail'] if pd.notna(row['e-mail']) else '',
-            'empresa': row['Empresa'] if pd.notna(row['Empresa']) else '',
-            'setor': row['setor'] if pd.notna(row['setor']) else '',
-            'estado': row['estado'] if pd.notna(row['estado']) else '',
-            'centro_custo': row['Centro de Custo'] if pd.notna(row['Centro de Custo']) else '',
-            'quantidade': float(row['quantidade de licenças']) if pd.notna(row['quantidade de licenças']) else 0,
-            'valor_unitario': float(row['valor unitario']) if pd.notna(row['valor unitario']) else 0,
-            'total': float(row['total']) if pd.notna(row['total']) else 0
-        })
+    # Obter lista de usuários
+    usuarios = dados_licenca[['colaborador', 'email', 'empresa', 'setor', 'estado', 'Centro de Custo',
+                               'qtdLicenca', 'valorUnitarioMensal', 'valorTotalLicenca']]
     
-    return jsonify({
-        'licenca': licenca,
-        'total_usuarios': len(usuarios),
-        'usuarios': usuarios
+    # Renomear colunas para o formato desejado na resposta
+    usuarios = usuarios.rename(columns={
+        'colaborador': 'Colaborador',
+        'email': 'Email',
+        'empresa': 'Empresa',
+        'setor': 'Setor',
+        'estado': 'Estado',
+        'Centro de Custo': 'Centro de Custo',
+        'qtdLicenca': 'Quantidade',
+        'valorUnitarioMensal': 'Valor Unitário',
+        'valorTotalLicenca': 'Total'
     })
+    
+    # Converter para lista de dicionários
+    usuarios_list = usuarios.to_dict(orient='records')
+    
+    # Contar total de usuários
+    total_usuarios = len(usuarios_list)
+    
+    return jsonify({'total_usuarios': total_usuarios, 'usuarios': usuarios_list})
+
 
 if __name__ == '__main__':
-    import os
-    
-    print("\n" + "="*80)
-    print("🚀 Dashboard de Licenciamento Microsoft")
-    print("="*80)
-    print("\n📊 Dashboard iniciando...")
-    
-    # Verificar se está rodando em Docker
-    in_docker = os.path.exists('/.dockerenv')
-    
-    if in_docker:
-        print("🐳 Rodando em Docker")
-        print("🌐 Acesse: http://localhost:5000 (do seu navegador)")
-    else:
-        print("💻 Rodando localmente")
-        print("🌐 Acesse: http://127.0.0.1:5000")
-    
-    print("\n💡 Dica: Clique em 'Atualizar' após modificar a planilha ou pressione F5")
-    print("💡 Clique em uma licença para ver todos os usuários!")
-    print("💡 Para parar: Pressione Ctrl+C")
-    print("="*80 + "\n")
-    
-    # Em Docker, bind em 0.0.0.0 para aceitar conexões externas
-    host = '0.0.0.0' if in_docker else '127.0.0.1'
-    
-    app.run(debug=False, port=5000, host=host)
+    app.run(host='0.0.0.0', debug=True, port=5000)
