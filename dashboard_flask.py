@@ -1,5 +1,7 @@
 from flask import Flask, render_template_string, request, jsonify, Response
 import pandas as pd
+import numpy as np
+import math
 import plotly.express as px
 import plotly.graph_objects as go
 import json
@@ -8,6 +10,22 @@ from urllib.parse import quote
 import re
 
 app = Flask(__name__)
+
+# Configurar JSON encoder para não permitir NaN
+app.json.ensure_ascii = False
+app.json.sort_keys = False
+
+# Custom JSON encoder que converte NaN para null
+from flask.json.provider import DefaultJSONProvider
+
+class SafeJSONProvider(DefaultJSONProvider):
+    def default(self, obj):
+        if isinstance(obj, float):
+            if math.isnan(obj) or math.isinf(obj):
+                return None
+        return super().default(obj)
+
+app.json = SafeJSONProvider(app)
 
 # Caminho do arquivo Excel utilizado pelo dashboard
 EXCEL_FILE = 'LICENCIAMENTO MICROSOFT (1).xlsx'
@@ -1221,194 +1239,237 @@ HTML_TEMPLATE = '''
 
         <script>
     window.mostrarUsuarios = function(licenca) {
-            const modalEl = document.getElementById('modalUsuarios');
-            let modal = null;
-            try {
-                if (window.bootstrap && bootstrap.Modal) {
-                    modal = new bootstrap.Modal(modalEl);
-                }
-            } catch (e) {
-                console.warn('Bootstrap Modal não disponível, aplicando fallback:', e);
-            }
-            document.getElementById('modalTitle').textContent = `👥 Usuários da Licença: ${licenca}`;
-            document.getElementById('modalBody').innerHTML = `
-                <div class="text-center">
-                    <div class="spinner-border text-primary" role="status">
-                        <span class="visually-hidden">Carregando...</span>
-                    </div>
-                    <p class="mt-2">Carregando usuários...</p>
+        console.log('=== INICIO mostrarUsuarios ===');
+        console.log('Licença recebida:', licenca);
+        console.log('Tipo:', typeof licenca);
+        
+        const modalEl = document.getElementById('modalUsuarios');
+        const modalBody = document.getElementById('modalBody');
+        const modalTitle = document.getElementById('modalTitle');
+        
+        console.log('Elementos encontrados:', {
+            modalEl: !!modalEl,
+            modalBody: !!modalBody,
+            modalTitle: !!modalTitle
+        });
+        
+        if (!modalEl || !modalBody || !modalTitle) {
+            console.error('ERRO: Elementos do modal não encontrados!');
+            alert('Erro ao abrir modal. Por favor, recarregue a página.');
+            return;
+        }
+        
+        // Atualizar título
+        modalTitle.textContent = `👥 Usuários da Licença: ${licenca}`;
+        console.log('Título atualizado');
+        
+        // Mostrar loading
+        modalBody.innerHTML = `
+            <div class="text-center p-4">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Carregando...</span>
                 </div>
-            `;
-            if (modal) {
-                modal.show();
-            } else {
-                // Fallback simples caso Bootstrap não esteja disponível
-                modalEl.classList.add('show');
-                modalEl.style.display = 'block';
-                modalEl.removeAttribute('aria-hidden');
-                modalEl.setAttribute('aria-modal', 'true');
-            }
-            fetch(`/api/usuarios/${encodeURIComponent(licenca)}`)
-                .then(response => {
-                    if (!response.ok) {
-                        console.error('Falha HTTP ao buscar usuários:', response.status, response.statusText);
-                        throw new Error('HTTP ' + response.status);
-                    }
-                    return response.json();
-                })
-                .then(data => {
-                    console.log('Dados recebidos de /api/usuarios:', data);
-                    let html = '';
-                    const hasUsers = Array.isArray(data.usuarios) && data.usuarios.length > 0;
-                    const usuariosData = hasUsers ? data.usuarios : [];
-                    
-                    // Derivar chips (Empresa, Setor, Estado)
-                    const uniq = (arr) => Array.from(new Set(arr.filter(v => v != null && v !== ''))).sort();
-                    const empresas = uniq(usuariosData.map(u => u['Empresa']));
-                    const setores = uniq(usuariosData.map(u => u['Setor']));
-                    const estados = uniq(usuariosData.map(u => u['Estado']));
-                    
-                    // Estado do filtro e paginação
-                    let filtroTexto = '';
-                    let filtroEmpresa = null;
-                    let filtroSetor = null;
-                    let filtroEstado = null;
-                    let pagina = 1;
-                    const porPagina = 10;
-
-                    html += `
-                        <div class="d-flex align-items-center justify-content-between mb-3">
-                            <div class="alert alert-info mb-0">
-                                <strong>Total de usuários com esta licença: ${data.total_usuarios}</strong>
-                            </div>
-                            <div class="input-group" style="max-width: 360px;">
-                                <input type="text" id="usuarios-search" class="form-control form-control-sm" placeholder="Pesquisar usuário, email, empresa..." ${hasUsers ? '' : 'disabled'}>
-                                <button class="btn btn-outline-secondary btn-sm" id="usuarios-clear" type="button" ${hasUsers ? '' : 'disabled'}>Limpar</button>
-                            </div>
+                <p class="mt-3">Carregando usuários...</p>
+            </div>
+        `;
+        console.log('Loading exibido');
+        
+        // Abrir modal
+        try {
+            const modal = new bootstrap.Modal(modalEl);
+            modal.show();
+            console.log('Modal aberto');
+        } catch(e) {
+            console.error('Erro ao abrir modal:', e);
+        }
+        
+        // Buscar dados
+        const url = `/api/usuarios/${encodeURIComponent(licenca)}`;
+        console.log('URL da API:', url);
+        
+        fetch(url)
+            .then(response => {
+                console.log('=== RESPONSE ===');
+                console.log('Status:', response.status);
+                console.log('OK:', response.ok);
+                console.log('StatusText:', response.statusText);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log('=== DADOS RECEBIDOS ===');
+                console.log('Data completo:', data);
+                console.log('Tipo de data:', typeof data);
+                console.log('Data.usuarios existe:', 'usuarios' in data);
+                console.log('Data.usuarios é array:', Array.isArray(data.usuarios));
+                console.log('Quantidade de usuários:', data.usuarios ? data.usuarios.length : 0);
+                
+                if (!data || typeof data !== 'object') {
+                    throw new Error('Resposta inválida da API');
+                }
+                
+                const hasUsers = Array.isArray(data.usuarios) && data.usuarios.length > 0;
+                const usuariosData = hasUsers ? data.usuarios : [];
+                
+                console.log('hasUsers:', hasUsers);
+                console.log('usuariosData length:', usuariosData.length);
+                
+                if (!hasUsers) {
+                    modalBody.innerHTML = `
+                        <div class="alert alert-info">
+                            <strong>Total de usuários: 0</strong><br>
+                            Nenhum usuário encontrado para esta licença.
                         </div>
-                        
-                        ${hasUsers ? `
-                        <div class="mb-3">
-                            <div class="d-flex flex-wrap gap-2 align-items-center">
-                                <span class="text-muted small me-2">Filtros rápidos:</span>
-                                <div id="chips-empresa" class="d-flex flex-wrap gap-2"></div>
-                                <div id="chips-setor" class="d-flex flex-wrap gap-2"></div>
-                                <div id="chips-estado" class="d-flex flex-wrap gap-2"></div>
-                                <button class="btn btn-sm btn-outline-secondary" id="chips-clear">Limpar filtros</button>
-                            </div>
-                        </div>
-                        ` : ''}
                     `;
+                    return;
+                }
+                
+                // Derivar chips (Empresa, Setor, Estado)
+                const uniq = (arr) => Array.from(new Set(arr.filter(v => v != null && v !== ''))).sort();
+                const empresas = uniq(usuariosData.map(u => u['Empresa']));
+                const setores = uniq(usuariosData.map(u => u['Setor']));
+                const estados = uniq(usuariosData.map(u => u['Estado']));
+                
+                // Estado do filtro e paginação
+                let filtroTexto = '';
+                let filtroEmpresa = null;
+                let filtroSetor = null;
+                let filtroEstado = null;
+                let pagina = 1;
+                const porPagina = 10;
 
-                    if (!hasUsers) {
-                        html += '<p class="text-muted">Nenhum usuário encontrado para esta licença.</p>';
-                    } else {
-                        html += '<div id="usuariosList"></div>';
-                        html += '<div id="usuariosPagination" class="d-flex justify-content-between align-items-center mt-3"></div>';
-                    }
+                // Construir HTML
+                let html = `
+                    <div class="d-flex align-items-center justify-content-between mb-3">
+                        <div class="alert alert-info mb-0">
+                            <strong>Total de usuários com esta licença: ${data.total_usuarios}</strong>
+                        </div>
+                        <div class="input-group" style="max-width: 360px;">
+                            <input type="text" id="usuarios-search" class="form-control form-control-sm" placeholder="Pesquisar usuário, email, empresa...">
+                            <button class="btn btn-outline-secondary btn-sm" id="usuarios-clear" type="button">Limpar</button>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <div class="d-flex flex-wrap gap-2 align-items-center">
+                            <span class="text-muted small me-2">Filtros rápidos:</span>
+                            <div id="chips-empresa" class="d-flex flex-wrap gap-2"></div>
+                            <div id="chips-setor" class="d-flex flex-wrap gap-2"></div>
+                            <div id="chips-estado" class="d-flex flex-wrap gap-2"></div>
+                            <button class="btn btn-sm btn-outline-secondary" id="chips-clear">Limpar filtros</button>
+                        </div>
+                    </div>
+                    <div id="usuariosList"></div>
+                    <div id="usuariosPagination" class="d-flex justify-content-between align-items-center mt-3"></div>
+                `;
 
-                    const modalBody = document.getElementById('modalBody');
-                    modalBody.innerHTML = html;
+                console.log('=== CONSTRUINDO HTML ===');
+                console.log('HTML length:', html.length);
+                
+                modalBody.innerHTML = html;
+                console.log('HTML inserido no modalBody');
 
-                    // Filtro + chips + paginação
-                    if (hasUsers) {
-                        const input = document.getElementById('usuarios-search');
-                        const clearBtn = document.getElementById('usuarios-clear');
-                        const chipsEmpresa = document.getElementById('chips-empresa');
-                        const chipsSetor = document.getElementById('chips-setor');
-                        const chipsEstado = document.getElementById('chips-estado');
-                        const chipsClear = document.getElementById('chips-clear');
-                        const listEl = document.getElementById('usuariosList');
-                        const pagerEl = document.getElementById('usuariosPagination');
+                // Filtro + chips + paginação
+                const input = document.getElementById('usuarios-search');
+                const clearBtn = document.getElementById('usuarios-clear');
+                const chipsEmpresa = document.getElementById('chips-empresa');
+                const chipsSetor = document.getElementById('chips-setor');
+                const chipsEstado = document.getElementById('chips-estado');
+                const chipsClear = document.getElementById('chips-clear');
+                const listEl = document.getElementById('usuariosList');
+                const pagerEl = document.getElementById('usuariosPagination');
 
-                        const renderChips = (items, container, kind) => {
-                            if (!container) return;
-                            container.innerHTML = items.map(val => `
-                                <button type="button" class="btn btn-sm ${kind}-chip ${kind}-chip-item btn-outline-primary" data-value="${String(val)}">
-                                    ${String(val)}
-                                </button>
-                            `).join('');
-                            container.querySelectorAll(`.${kind}-chip-item`).forEach(btn => {
-                                btn.addEventListener('click', () => {
-                                    const value = btn.getAttribute('data-value');
-                                    if (kind === 'empresa') filtroEmpresa = (filtroEmpresa === value ? null : value);
-                                    if (kind === 'setor') filtroSetor = (filtroSetor === value ? null : value);
-                                    if (kind === 'estado') filtroEstado = (filtroEstado === value ? null : value);
-                                    pagina = 1;
-                                    update();
-                                });
-                            });
-                        };
+                const renderChips = (items, container, kind) => {
+                    if (!container) return;
+                    container.innerHTML = items.map(val => `
+                        <button type="button" class="btn btn-sm ${kind}-chip ${kind}-chip-item btn-outline-primary" data-value="${String(val)}">
+                            ${String(val)}
+                        </button>
+                    `).join('');
+                    container.querySelectorAll(`.${kind}-chip-item`).forEach(btn => {
+                        btn.addEventListener('click', () => {
+                            const value = btn.getAttribute('data-value');
+                            if (kind === 'empresa') filtroEmpresa = (filtroEmpresa === value ? null : value);
+                            if (kind === 'setor') filtroSetor = (filtroSetor === value ? null : value);
+                            if (kind === 'estado') filtroEstado = (filtroEstado === value ? null : value);
+                            pagina = 1;
+                            update();
+                        });
+                    });
+                };
 
-                        const filtrar = () => {
-                            const termo = (filtroTexto || '').toLowerCase();
-                            return usuariosData.filter(u => {
-                                const texto = [u['Colaborador'], u['Email'], u['Empresa'], u['Setor'], u['Estado'], u['Centro de Custo']]
-                                    .map(x => (x || '').toString().toLowerCase()).join(' ');
-                                if (termo && !texto.includes(termo)) return false;
-                                if (filtroEmpresa && u['Empresa'] !== filtroEmpresa) return false;
-                                if (filtroSetor && u['Setor'] !== filtroSetor) return false;
-                                if (filtroEstado && u['Estado'] !== filtroEstado) return false;
-                                return true;
-                            });
-                        };
+                const filtrar = () => {
+                    const termo = (filtroTexto || '').toLowerCase();
+                    return usuariosData.filter(u => {
+                        const texto = [u['Colaborador'], u['Email'], u['Empresa'], u['Setor'], u['Estado'], u['Centro de Custo']]
+                            .map(x => (x || '').toString().toLowerCase()).join(' ');
+                        if (termo && !texto.includes(termo)) return false;
+                        if (filtroEmpresa && u['Empresa'] !== filtroEmpresa) return false;
+                        if (filtroSetor && u['Setor'] !== filtroSetor) return false;
+                        if (filtroEstado && u['Estado'] !== filtroEstado) return false;
+                        return true;
+                    });
+                };
 
-                        const renderList = (arr) => {
-                            listEl.innerHTML = arr.map(usuario => `
-                                <div class="user-card">
-                                    <div class="row">
-                                        <div class="col-md-8">
-                                            <h6 class="mb-1"><strong>${usuario['Colaborador'] || ''}</strong></h6>
-                                            <p class="mb-1 text-muted small">
-                                                📧 ${usuario['Email'] || 'Sem email'}<br>
-                                                🏢 ${usuario['Empresa'] || ''}<br>
-                                                🏭 Setor: ${usuario['Setor'] || ''}<br>
-                                                🗺️ Estado: ${usuario['Estado'] || ''}<br>
-                                                🏦 Centro de Custo: ${usuario['Centro de Custo'] || ''}
-                                            </p>
-                                        </div>
-                                        <div class="col-md-4 text-end">
-                                            <p class="mb-1"><strong>Criação:</strong> ${usuario['Data de Criação'] || ''}</p>
-                                            <p class="mb-1"><strong>Qtd:</strong> ${usuario['Quantidade'] ?? ''}</p>
-                                            <p class="mb-1"><strong>Valor Unit:</strong> R$ ${Number(usuario['Valor Unitário'] ?? 0).toFixed(2)}</p>
-                                            <p class="mb-0"><strong>Total:</strong> R$ ${Number(usuario['Total'] ?? 0).toFixed(2)}</p>
-                                        </div>
-                                    </div>
+                const renderList = (arr) => {
+                    listEl.innerHTML = arr.map(usuario => `
+                        <div class="user-card">
+                            <div class="row">
+                                <div class="col-md-8">
+                                    <h6 class="mb-1"><strong>${usuario['Colaborador'] || ''}</strong></h6>
+                                    <p class="mb-1 text-muted small">
+                                        📧 ${usuario['Email'] || 'Sem email'}<br>
+                                        🏢 ${usuario['Empresa'] || ''}<br>
+                                        🏭 Setor: ${usuario['Setor'] || ''}<br>
+                                        🗺️ Estado: ${usuario['Estado'] || ''}<br>
+                                        🏦 Centro de Custo: ${usuario['Centro de Custo'] || ''}
+                                    </p>
                                 </div>
-                            `).join('');
-                        };
-
-                        const renderPager = (total, page, perPage) => {
-                            const totalPages = Math.max(1, Math.ceil(total / perPage));
-                            const prevDisabled = page <= 1 ? 'disabled' : '';
-                            const nextDisabled = page >= totalPages ? 'disabled' : '';
-                            pagerEl.innerHTML = `
-                                <div class="small text-muted">Exibindo página ${page} de ${totalPages} (total ${total} usuários)</div>
-                                <div>
-                                    <button class="btn btn-sm btn-outline-secondary me-2" id="usuarios-prev" ${prevDisabled}>Anterior</button>
-                                    <button class="btn btn-sm btn-outline-secondary" id="usuarios-next" ${nextDisabled}>Próxima</button>
+                                <div class="col-md-4 text-end">
+                                    <p class="mb-1"><strong>Criação:</strong> ${usuario['Data de Criação'] || ''}</p>
+                                    <p class="mb-1"><strong>Qtd:</strong> ${usuario['Quantidade'] ?? ''}</p>
+                                    <p class="mb-1"><strong>Valor Unit:</strong> R$ ${Number(usuario['Valor Unitário'] ?? 0).toFixed(2)}</p>
+                                    <p class="mb-0"><strong>Total:</strong> R$ ${Number(usuario['Total'] ?? 0).toFixed(2)}</p>
                                 </div>
-                            `;
-                            const prev = document.getElementById('usuarios-prev');
-                            const next = document.getElementById('usuarios-next');
-                            if (prev) prev.onclick = () => { if (pagina > 1) { pagina--; update(); } };
-                            if (next) next.onclick = () => { pagina++; update(); };
-                        };
+                            </div>
+                        </div>
+                    `).join('');
+                };
 
-                        const update = () => {
-                            filtroTexto = (input.value || '');
-                            const filtrados = filtrar();
-                            const total = filtrados.length;
-                            const totalPages = Math.max(1, Math.ceil(total / porPagina));
-                            if (pagina > totalPages) pagina = totalPages;
-                            const inicio = (pagina - 1) * porPagina;
-                            const pageArr = filtrados.slice(inicio, inicio + porPagina);
-                            renderList(pageArr);
-                            renderPager(total, pagina, porPagina);
+                const renderPager = (total, page, perPage) => {
+                    const totalPages = Math.max(1, Math.ceil(total / perPage));
+                    const prevDisabled = page <= 1 ? 'disabled' : '';
+                    const nextDisabled = page >= totalPages ? 'disabled' : '';
+                    pagerEl.innerHTML = `
+                        <div class="small text-muted">Exibindo página ${page} de ${totalPages} (total ${total} usuários)</div>
+                        <div>
+                            <button class="btn btn-sm btn-outline-secondary me-2" id="usuarios-prev" ${prevDisabled}>Anterior</button>
+                            <button class="btn btn-sm btn-outline-secondary" id="usuarios-next" ${nextDisabled}>Próxima</button>
+                        </div>
+                    `;
+                    const prev = document.getElementById('usuarios-prev');
+                    const next = document.getElementById('usuarios-next');
+                    if (prev) prev.onclick = () => { if (pagina > 1) { pagina--; update(); } };
+                    if (next) next.onclick = () => { pagina++; update(); };
+                };
 
-                            // Marcar chips ativos
-                            const toggleActive = (container, kind, current) => {
-                                if (!container) return;
+                const update = () => {
+                    filtroTexto = (input.value || '');
+                    const filtrados = filtrar();
+                    const total = filtrados.length;
+                    const totalPages = Math.max(1, Math.ceil(total / porPagina));
+                    if (pagina > totalPages) pagina = totalPages;
+                    const inicio = (pagina - 1) * porPagina;
+                    const pageArr = filtrados.slice(inicio, inicio + porPagina);
+                    renderList(pageArr);
+                    renderPager(total, pagina, porPagina);
+
+                    // Marcar chips ativos
+                    const toggleActive = (container, kind, current) => {
+                        if (!container) return;
                                 container.querySelectorAll(`.${kind}-chip-item`).forEach(btn => {
                                     const value = btn.getAttribute('data-value');
                                     btn.classList.toggle('btn-primary', current === value);
@@ -1429,17 +1490,23 @@ HTML_TEMPLATE = '''
                         renderChips(empresas, chipsEmpresa, 'empresa');
                         renderChips(setores, chipsSetor, 'setor');
                         renderChips(estados, chipsEstado, 'estado');
-                        update();
-                    }
-                })
-                .catch(error => {
-                    console.error('Erro ao carregar usuários:', error);
-                    document.getElementById('modalBody').innerHTML = `
-                        <div class="alert alert-danger">
-                            Erro ao carregar usuários. Por favor, tente novamente.
-                        </div>
-                    `;
-                });
+                        console.log('Chips renderizados');
+                        
+                update();
+                console.log('=== FIM mostrarUsuarios (SUCESSO) ===');
+            })
+            .catch(error => {
+                console.error('=== ERRO AO CARREGAR USUÁRIOS ===');
+                console.error('Tipo do erro:', error.constructor.name);
+                console.error('Mensagem:', error.message);
+                console.error('Stack:', error.stack);
+                modalBody.innerHTML = `
+                    <div class="alert alert-danger">
+                        <strong>Erro ao carregar usuários:</strong><br>
+                        ${error.message || 'Por favor, tente novamente.'}
+                    </div>
+                `;
+            });
     }
     </script>
 </body>
@@ -1519,23 +1586,57 @@ def api_usuarios(licenca):
     # Garantir que Total não tenha NaN: usar fallback Valor Unitário * Quantidade quando Total faltar
     try:
         if 'Total' in usuarios.columns:
-            usuarios['Valor Unitário'] = pd.to_numeric(usuarios['Valor Unitário'], errors='coerce')
-            usuarios['Quantidade'] = pd.to_numeric(usuarios['Quantidade'], errors='coerce')
+            usuarios['Valor Unitário'] = pd.to_numeric(usuarios['Valor Unitário'], errors='coerce').fillna(0)
+            usuarios['Quantidade'] = pd.to_numeric(usuarios['Quantidade'], errors='coerce').fillna(0)
             usuarios['Total'] = pd.to_numeric(usuarios['Total'], errors='coerce')
-            usuarios['Total'] = usuarios['Total'].fillna(usuarios['Valor Unitário'] * usuarios['Quantidade'])
-    except Exception:
-        pass
+            # Calcular Total quando estiver NaN
+            mask_nan = pd.isna(usuarios['Total'])
+            usuarios.loc[mask_nan, 'Total'] = usuarios.loc[mask_nan, 'Valor Unitário'] * usuarios.loc[mask_nan, 'Quantidade']
+            # Garantir que Total seja 0 se ainda for NaN
+            usuarios['Total'] = usuarios['Total'].fillna(0)
+    except Exception as e:
+        app.logger.error(f"Erro ao processar Total: {e}")
 
-    # Remover NaN/NaT de todo o DataFrame para JSON válido (vira null no JSON)
-    usuarios = usuarios.where(pd.notna(usuarios), None)
+    # Substituir TODOS os NaN por 0 em colunas numéricas
+    numeric_cols = ['Valor Unitário', 'Quantidade', 'Total']
+    for col in numeric_cols:
+        if col in usuarios.columns:
+            usuarios[col] = usuarios[col].fillna(0)
     
-    # Converter para lista de dicionários
-    usuarios_list = usuarios.to_dict(orient='records')
+    # Substituir NaN por None em outras colunas
+    usuarios = usuarios.replace({pd.NA: None, np.nan: None})
+    
+    # Converter para dicionário
+    usuarios_dict = usuarios.to_dict(orient='records')
+    
+    # Limpar qualquer NaN que ainda possa existir (fallback final)
+    usuarios_list = []
+    for user in usuarios_dict:
+        cleaned_user = {}
+        for k, v in user.items():
+            # Usar pd.isna() que é mais robusto
+            if pd.isna(v):
+                cleaned_user[k] = 0 if k in numeric_cols else None
+            else:
+                cleaned_user[k] = v
+        usuarios_list.append(cleaned_user)
+    
+    # DEBUG: Verificar quantos NaNs ainda existem
+    nan_count = sum(1 for user in usuarios_list for v in user.values() if pd.isna(v))
+    app.logger.info(f"DEBUG: {nan_count} valores NaN encontrados após limpeza")
+    
+    # Log para debug
+    app.logger.info(f"Retornando {len(usuarios_list)} usuários para licença '{licenca}'")
     
     # Contar total de usuários
     total_usuarios = len(usuarios_list)
-    
-    return jsonify({'total_usuarios': total_usuarios, 'usuarios': usuarios_list})
+
+    # Retornar usando Response com JSON manual para evitar NaN
+    response_data = {'total_usuarios': total_usuarios, 'usuarios': usuarios_list}
+    return Response(
+        json.dumps(response_data, ensure_ascii=False, allow_nan=False),
+        mimetype='application/json'
+    )
 
 
 @app.route('/api/rateio_contrato', methods=['GET'])
