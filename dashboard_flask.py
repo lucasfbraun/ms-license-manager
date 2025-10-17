@@ -348,6 +348,66 @@ def gerar_tabela_contratos(df):
     <script>
     (function(){
         const checkAll = document.getElementById('checkAllContratos');
+    // Handler para abrir a modal com todos os usuários ao clicar no KPI
+    (function(){
+        function renderUsersTable(usuarios, container, page=1, pageSize=25){
+            const start = (page-1)*pageSize;
+            const end = start + pageSize;
+            const pageItems = usuarios.slice(start, end);
+
+            let html = '<div class="table-responsive"><table class="table table-sm table-striped"><thead><tr>';
+            const keys = Object.keys(usuarios[0] || {});
+            for(const k of keys){ html += `<th>${k}</th>` }
+            html += '</tr></thead><tbody>';
+            for(const u of pageItems){
+                html += '<tr>';
+                for(const k of keys){ html += `<td>${u[k]===null||u[k]===undefined?'':u[k]}</td>` }
+                html += '</tr>';
+            }
+            html += `</tbody></table></div>`;
+
+            // paginação simples
+            const totalPages = Math.max(1, Math.ceil(usuarios.length / pageSize));
+            html += '<nav><ul class="pagination pagination-sm">';
+            for(let p=1;p<=totalPages;p++){
+                html += `<li class="page-item ${p===page?'active':''}"><a href="#" class="page-link" data-page="${p}">${p}</a></li>`;
+            }
+            html += '</ul></nav>';
+
+            container.innerHTML = html;
+            // attach page click
+            container.querySelectorAll('.page-link').forEach(a=>{
+                a.addEventListener('click', function(e){
+                    e.preventDefault();
+                    const p = parseInt(this.getAttribute('data-page'))||1;
+                    renderUsersTable(usuarios, container, p, pageSize);
+                })
+            })
+        }
+
+        const kpi = document.getElementById('kpi-total-usuarios');
+        if(kpi){
+            kpi.style.cursor = 'pointer';
+            kpi.addEventListener('click', function(){
+                const modal = document.getElementById('modalUsuarios');
+                const modalBody = modal.querySelector('.modal-body');
+                modal.querySelector('.modal-title').textContent = 'Todos os Usuários';
+                modalBody.innerHTML = '<p>Carregando usuários...</p>';
+                // abrir modal
+                const bsModal = new bootstrap.Modal(modal);
+                bsModal.show();
+
+                fetch('/api/usuarios').then(r=>r.json()).then(data=>{
+                    const usuarios = data.usuarios || [];
+                    if(usuarios.length===0){ modalBody.innerHTML = '<p>Nenhum usuário encontrado.</p>'; return; }
+                    renderUsersTable(usuarios, modalBody, 1, 25);
+                }).catch(err=>{
+                    console.error('Erro ao carregar todos os usuários', err);
+                    modalBody.innerHTML = '<div class="text-danger">Erro ao carregar usuários. Veja console.</div>';
+                })
+            })
+        }
+    })();
         const exportBtn = document.getElementById('export_rateio_btn');
         const clearBtn = document.getElementById('clear_selection');
         const selCountEl = document.getElementById('sel_count');
@@ -433,6 +493,112 @@ def gerar_tabela_contratos(df):
         }
 
         updateState();
+    })();
+    </script>
+    <script>
+    // Inline All Users list: fetch, sort by creation date desc, search, and render
+    (function(){
+        const container = document.getElementById('allusers-container');
+        const listEl = document.getElementById('allusers-list');
+        const loadingEl = document.getElementById('allusers-loading');
+        const input = document.getElementById('allusers-search');
+        const refreshBtn = document.getElementById('allusers-refresh');
+
+        if(!container || !listEl || !loadingEl) return;
+
+        let allUsers = [];
+
+        function parseDateSafe(val){
+            if(!val) return null;
+            // try ISO parse
+            const d = new Date(val);
+            if(!isNaN(d)) return d;
+            // try dd/mm/yyyy
+            const parts = String(val).split('/');
+            if(parts.length===3){
+                const dd = parts[0], mm = parts[1], yyyy = parts[2];
+                const dx = new Date(`${yyyy}-${mm}-${dd}`);
+                if(!isNaN(dx)) return dx;
+            }
+            return null;
+        }
+
+        function renderRows(arr){
+            if(!Array.isArray(arr)) arr = [];
+            if(arr.length===0){
+                listEl.innerHTML = '<div class="text-muted p-3">Nenhum usuário encontrado.</div>';
+                listEl.style.display = '';
+                return;
+            }
+
+            const html = arr.map(u=>{
+                const created = u['Data de Criação'] || u['DataCriacaoEmail'] || u['DataCriacaoFormatada'] || '';
+                const createdFmt = created ? String(created).replace('T00:00:00','') : '';
+                const centro = u['Centro de Custo'] || '';
+                const empresa = u['Empresa'] || '';
+                return `
+                    <div class="user-card mb-2">
+                        <div class="row">
+                            <div class="col-md-8">
+                                <strong>${u['Colaborador'] || ''}</strong><br>
+                                <small class="text-muted">${u['Email'] || ''} • ${empresa} • ${centro}</small>
+                            </div>
+                            <div class="col-md-4 text-end">
+                                <small class="text-muted">${createdFmt}</small>
+                            </div>
+                        </div>
+                    </div>`;
+            }).join('');
+
+            listEl.innerHTML = html;
+            listEl.style.display = '';
+        }
+
+        function applySearchAndRender(){
+            const term = (input && input.value || '').toLowerCase();
+            let filtered = allUsers.filter(u => {
+                const txt = [u['Colaborador'], u['Email'], u['Empresa'], u['Centro de Custo']].map(x => (x||'').toString().toLowerCase()).join(' ');
+                return txt.includes(term);
+            });
+            renderRows(filtered);
+        }
+
+        function fetchAndRender(){
+            loadingEl.style.display = '';
+            listEl.style.display = 'none';
+            fetch('/api/usuarios').then(r=>{ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); }).then(data=>{
+                const users = (data && data.usuarios) ? data.usuarios : [];
+                // normalize dates
+                users.forEach(u=>{
+                    const candidates = ['Data de Criação','DataCriacaoEmail','DataCriacaoFormatada'];
+                    let found = null;
+                    for(const c of candidates){ if(u[c]) { found = u[c]; break; } }
+                    u.__created = parseDateSafe(found);
+                });
+
+                // sort desc by __created (nulls last)
+                users.sort((a,b)=>{
+                    const da = a.__created, db = b.__created;
+                    if(da && db) return db - da;
+                    if(da && !db) return -1;
+                    if(!da && db) return 1;
+                    return 0;
+                });
+
+                allUsers = users;
+                loadingEl.style.display = 'none';
+                applySearchAndRender();
+            }).catch(err=>{
+                console.error('Erro fetching all users inline:', err);
+                loadingEl.innerHTML = `<div class="text-danger p-3">Erro ao carregar usuários: ${err.message}</div>`;
+            });
+        }
+
+        if(input) input.addEventListener('input', applySearchAndRender);
+        if(refreshBtn) refreshBtn.addEventListener('click', fetchAndRender);
+
+        // initial load
+        fetchAndRender();
     })();
     </script>
     '''
@@ -1045,7 +1211,7 @@ HTML_TEMPLATE = '''
                 <div class="card kpi-card bg-primary text-white">
                     <div class="card-body text-center">
                         <h6>👥 Total de Usuários</h6>
-                        <h2>{{ kpis.total_usuarios }}</h2>
+                        <h2 id="kpi-total-usuarios">{{ kpis.total_usuarios }}</h2>
                         <small>Usuários com licenças</small>
                     </div>
                 </div>
@@ -1065,6 +1231,33 @@ HTML_TEMPLATE = '''
                         <h6>📋 Licenças</h6>
                         <h2>{{ kpis.total_licencas }}</h2>
                         <small>Total de licenças ativas</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Card: Todos os Usuários (inline) -->
+        <div class="row mb-4">
+            <div class="col-md-12">
+                <div class="card card-custom">
+                    <div class="card-body">
+                        <h5 class="card-title">👥 Todos os Usuários (Lista)</h5>
+                        <p class="text-muted">Lista inline com pesquisa e rolagem, ordenada por Data de Criação (mais recente primeiro).</p>
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <input id="allusers-search" type="text" class="form-control form-control-sm" placeholder="Pesquisar usuário, email, empresa, centro de custo...">
+                            </div>
+                            <div class="col-md-6 text-end">
+                                <button id="allusers-refresh" class="btn btn-sm btn-outline-primary">Atualizar</button>
+                            </div>
+                        </div>
+
+                        <div id="allusers-container" style="max-height:600px; overflow-y:auto;">
+                            <div class="text-center py-4" id="allusers-loading">
+                                <div class="spinner-border text-primary" role="status"><span class="visually-hidden">Carregando...</span></div>
+                            </div>
+                            <div id="allusers-list" style="display:none;"></div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1509,6 +1702,79 @@ HTML_TEMPLATE = '''
             });
     }
     </script>
+    <script>
+    // Fallback/global handler para abrir a modal de TODOS os usuários ao clicar no KPI
+    (function(){
+        function buildAndRenderTable(usuarios, container, page=1, pageSize=25){
+            if(!Array.isArray(usuarios)) usuarios = [];
+            const keys = Object.keys(usuarios[0] || {});
+            const start = (page-1)*pageSize;
+            const pageItems = usuarios.slice(start, start+pageSize);
+
+            let html = '<div class="table-responsive"><table class="table table-sm table-striped"><thead><tr>';
+            for(const k of keys) html += `<th>${k}</th>`;
+            html += '</tr></thead><tbody>';
+            for(const row of pageItems){
+                html += '<tr>';
+                for(const k of keys){ html += `<td>${row[k]===null||row[k]===undefined?'':row[k]}</td>` }
+                html += '</tr>';
+            }
+            html += `</tbody></table></div>`;
+
+            const totalPages = Math.max(1, Math.ceil(usuarios.length / pageSize));
+            html += '<nav><ul class="pagination pagination-sm">';
+            for(let p=1;p<=totalPages;p++){
+                html += `<li class="page-item ${p===page?'active':''}"><a href="#" class="page-link" data-page="${p}">${p}</a></li>`;
+            }
+            html += '</ul></nav>';
+
+            container.innerHTML = html;
+            container.querySelectorAll('.page-link').forEach(a=>{
+                a.addEventListener('click', function(e){
+                    e.preventDefault();
+                    const p = parseInt(this.getAttribute('data-page'))||1;
+                    buildAndRenderTable(usuarios, container, p, pageSize);
+                })
+            })
+        }
+
+        function openAllUsersModal(){
+            const modalEl = document.getElementById('modalUsuarios');
+            const modalBody = document.getElementById('modalBody');
+            const modalTitle = document.getElementById('modalTitle');
+            if(!modalEl || !modalBody || !modalTitle) return;
+            modalTitle.textContent = '👥 Todos os Usuários';
+            modalBody.innerHTML = '<p>Carregando usuários...</p>';
+            const bs = new bootstrap.Modal(modalEl);
+            bs.show();
+
+            fetch('/api/usuarios').then(r=>{
+                if(!r.ok) throw new Error('HTTP ' + r.status);
+                return r.json();
+            }).then(data=>{
+                const usuarios = (data && data.usuarios) ? data.usuarios : [];
+                if(usuarios.length === 0){
+                    modalBody.innerHTML = '<div class="alert alert-info">Nenhum usuário encontrado.</div>';
+                    return;
+                }
+                buildAndRenderTable(usuarios, modalBody, 1, 25);
+            }).catch(err=>{
+                console.error('Falha ao carregar todos os usuários (global):', err);
+                modalBody.innerHTML = `<div class="alert alert-danger">Erro ao carregar usuários: ${err.message}</div>`;
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', function(){
+            const kpi = document.getElementById('kpi-total-usuarios');
+            if(kpi){
+                kpi.style.cursor = 'pointer';
+                kpi.addEventListener('click', function(e){
+                    try{ openAllUsersModal(); }catch(ex){ console.error(ex); }
+                });
+            }
+        });
+    })();
+    </script>
 </body>
 </html>
 '''
@@ -1637,6 +1903,68 @@ def api_usuarios(licenca):
         json.dumps(response_data, ensure_ascii=False, allow_nan=False),
         mimetype='application/json'
     )
+
+
+@app.route('/api/usuarios', methods=['GET'])
+def api_usuarios_all():
+    """Retorna todos os usuários (sem filtro de licença)"""
+    df = load_data()
+    # Selecionar colunas relevantes (mesmas usadas no endpoint por licença)
+    usuarios = df[['nomeColaborador', 'email', 'empresa', 'setor', 'estado', 'Centro de Custo',
+                   'qtdLicenca', 'valorUnitarioMensal', 'valorTotalLicenca', 'DataCriacaoFormatada']].copy()
+
+    usuarios = usuarios.rename(columns={
+        'nomeColaborador': 'Colaborador',
+        'email': 'Email',
+        'empresa': 'Empresa',
+        'setor': 'Setor',
+        'estado': 'Estado',
+        'Centro de Custo': 'Centro de Custo',
+        'qtdLicenca': 'Quantidade',
+        'valorUnitarioMensal': 'Valor Unitário',
+        'valorTotalLicenca': 'Total',
+        'DataCriacaoFormatada': 'Data de Criação'
+    })
+
+    # Normalizar e limpar
+    try:
+        usuarios['Valor Unitário'] = pd.to_numeric(usuarios['Valor Unitário'], errors='coerce').fillna(0)
+        usuarios['Quantidade'] = pd.to_numeric(usuarios['Quantidade'], errors='coerce').fillna(0)
+        usuarios['Total'] = pd.to_numeric(usuarios['Total'], errors='coerce')
+        mask_nan = pd.isna(usuarios['Total'])
+        usuarios.loc[mask_nan, 'Total'] = usuarios.loc[mask_nan, 'Valor Unitário'] * usuarios.loc[mask_nan, 'Quantidade']
+        usuarios['Total'] = usuarios['Total'].fillna(0)
+    except Exception as e:
+        app.logger.error(f"Erro ao processar Totais (all): {e}")
+
+    # Substituir NaN por None e preparar para JSON
+    usuarios = usuarios.replace({pd.NA: None, np.nan: None})
+
+    # Converter objetos datetime/timestamp para strings ISO para garantir serialização JSON
+    if 'Data de Criação' in usuarios.columns:
+        try:
+            usuarios['Data de Criação'] = usuarios['Data de Criação'].apply(
+                lambda x: x.isoformat() if hasattr(x, 'isoformat') else (str(x) if x is not None else None)
+            )
+        except Exception:
+            # Fallback mais simples
+            usuarios['Data de Criação'] = usuarios['Data de Criação'].astype(str).replace('NaT', None)
+
+    usuarios_dict = usuarios.to_dict(orient='records')
+
+    # Limpeza final
+    usuarios_list = []
+    for user in usuarios_dict:
+        cleaned = {}
+        for k, v in user.items():
+            if v != v:
+                cleaned[k] = 0 if k in ['Quantidade', 'Total', 'Valor Unitário'] else None
+            else:
+                cleaned[k] = v
+        usuarios_list.append(cleaned)
+
+    response_data = {'total_usuarios': len(usuarios_list), 'usuarios': usuarios_list}
+    return Response(json.dumps(response_data, ensure_ascii=False, allow_nan=False), mimetype='application/json')
 
 
 @app.route('/api/rateio_contrato', methods=['GET'])
