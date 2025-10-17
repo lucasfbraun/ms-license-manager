@@ -536,6 +536,10 @@ def gerar_tabela_contratos(df):
                 const createdFmt = created ? String(created).replace('T00:00:00','') : '';
                 const centro = u['Centro de Custo'] || '';
                 const empresa = u['Empresa'] || '';
+                const fmtNumber = (n)=> Number(n||0).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2});
+                const totalNum = u['Total'] ?? u['total'] ?? 0;
+                const valorTotalStr = u['Valor Total'] || u['ValorTotal'] || (totalNum ? ('R$ ' + fmtNumber(totalNum)) : 'R$ 0,00');
+
                 return `
                     <div class="user-card mb-2">
                         <div class="row">
@@ -544,7 +548,10 @@ def gerar_tabela_contratos(df):
                                 <small class="text-muted">${u['Email'] || ''} • ${empresa} • ${centro}</small>
                             </div>
                             <div class="col-md-4 text-end">
-                                <small class="text-muted">${createdFmt}</small>
+                                <p class="mb-1"><small class="text-muted">${createdFmt}</small></p>
+                                <p class="mb-1"><strong>Qtd:</strong> ${u['Quantidade'] ?? ''}</p>
+                                <p class="mb-1"><strong>Valor Unit:</strong> ${u['Valor Unitário']? 'R$ ' + Number(u['Valor Unitário']).toLocaleString('pt-BR', {minimumFractionDigits:2}): ''}</p>
+                                <p class="mb-0"><strong>Valor Total:</strong> ${valorTotalStr}</p>
                             </div>
                         </div>
                     </div>`;
@@ -1608,7 +1615,12 @@ HTML_TEMPLATE = '''
                 };
 
                 const renderList = (arr) => {
-                    listEl.innerHTML = arr.map(usuario => `
+                    listEl.innerHTML = arr.map(usuario => {
+                        const fmtNumber = (n)=> Number(n||0).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2});
+                        const valorUnitario = usuario['Valor Unitário'] ?? usuario['Valor UnitÃ¡rio'] ?? usuario['ValorUnitario'] ?? 0;
+                        const totalNum = usuario['Total'] ?? usuario['total'] ?? 0;
+                        const valorTotalStr = usuario['Valor Total'] || usuario['ValorTotal'] || (`R$ ${fmtNumber(totalNum)}`);
+                        return `
                         <div class="user-card">
                             <div class="row">
                                 <div class="col-md-8">
@@ -1624,12 +1636,12 @@ HTML_TEMPLATE = '''
                                 <div class="col-md-4 text-end">
                                     <p class="mb-1"><strong>Criação:</strong> ${usuario['Data de Criação'] || ''}</p>
                                     <p class="mb-1"><strong>Qtd:</strong> ${usuario['Quantidade'] ?? ''}</p>
-                                    <p class="mb-1"><strong>Valor Unit:</strong> R$ ${Number(usuario['Valor Unitário'] ?? 0).toFixed(2)}</p>
-                                    <p class="mb-0"><strong>Total:</strong> R$ ${Number(usuario['Total'] ?? 0).toFixed(2)}</p>
+                                    <p class="mb-1"><strong>Valor Unit:</strong> ${usuario['Valor Unitário']? 'R$ ' + Number(valorUnitario).toLocaleString('pt-BR', {minimumFractionDigits:2}): ''}</p>
+                                    <p class="mb-0"><strong>Valor Total:</strong> ${valorTotalStr}</p>
                                 </div>
                             </div>
-                        </div>
-                    `).join('');
+                        </div>`;
+                    }).join('');
                 };
 
                 const renderPager = (total, page, perPage) => {
@@ -1708,6 +1720,8 @@ HTML_TEMPLATE = '''
         function buildAndRenderTable(usuarios, container, page=1, pageSize=25){
             if(!Array.isArray(usuarios)) usuarios = [];
             const keys = Object.keys(usuarios[0] || {});
+            // Ensure 'Valor Total' column exists (prefer server formatted string)
+            if(!keys.includes('Valor Total')) keys.push('Valor Total');
             const start = (page-1)*pageSize;
             const pageItems = usuarios.slice(start, start+pageSize);
 
@@ -1716,7 +1730,14 @@ HTML_TEMPLATE = '''
             html += '</tr></thead><tbody>';
             for(const row of pageItems){
                 html += '<tr>';
-                for(const k of keys){ html += `<td>${row[k]===null||row[k]===undefined?'':row[k]}</td>` }
+                for(const k of keys){ 
+                    let val = row[k]===null||row[k]===undefined? '': row[k];
+                    // prefer formatted server string for Valor Total
+                    if(k === 'Valor Total'){
+                        val = row['Valor Total'] || row['ValorTotal'] || (row['Total'] ? ('R$ ' + Number(row['Total']).toLocaleString('pt-BR', {minimumFractionDigits:2})) : 'R$ 0,00');
+                    }
+                    html += `<td>${val}</td>`;
+                }
                 html += '</tr>';
             }
             html += `</tbody></table></div>`;
@@ -1874,6 +1895,16 @@ def api_usuarios(licenca):
     
     # Converter para dicionário
     usuarios_dict = usuarios.to_dict(orient='records')
+
+    # Adicionar coluna formatada para exibição: Valor Total (string em R$)
+    try:
+        usuarios['Valor Total'] = usuarios['Total'].apply(lambda v: f"R$ {v:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.') if v is not None else None)
+    except Exception:
+        # se algo falhar, garantir coluna presente
+        usuarios['Valor Total'] = usuarios['Total'].apply(lambda v: str(v) if v is not None else None)
+
+    # Re-converter dicionário para incluir a nova coluna ordenada no final
+    usuarios_dict = usuarios.to_dict(orient='records')
     
     # Limpar qualquer NaN que ainda possa existir (fallback final)
     usuarios_list = []
@@ -1962,6 +1993,17 @@ def api_usuarios_all():
             else:
                 cleaned[k] = v
         usuarios_list.append(cleaned)
+
+    # Adicionar campo formatado 'Valor Total' (string) em cada usuário para exibição
+    for u in usuarios_list:
+        try:
+            tot = u.get('Total')
+            if tot is None:
+                u['Valor Total'] = None
+            else:
+                u['Valor Total'] = f"R$ {float(tot):,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+        except Exception:
+            u['Valor Total'] = str(u.get('Total')) if u.get('Total') is not None else None
 
     response_data = {'total_usuarios': len(usuarios_list), 'usuarios': usuarios_list}
     return Response(json.dumps(response_data, ensure_ascii=False, allow_nan=False), mimetype='application/json')
