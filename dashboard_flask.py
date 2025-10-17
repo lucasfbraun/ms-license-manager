@@ -247,20 +247,16 @@ def api_export_selected():
             output = si.getvalue()
             return Response(output, mimetype='text/csv', headers={'X-Filename':'export_selected.csv'})
 
-        # compute per-centro totals among selected rows
-        # assume valorTotalLicenca (numeric) is the amount per row to be allocated
+        # ensure valorTotalLicenca is numeric
         if 'valorTotalLicenca' not in sel_df.columns:
             sel_df['valorTotalLicenca'] = pd.to_numeric(sel_df.get('valorTotalLicenca', pd.Series([0]*len(sel_df))), errors='coerce').fillna(0)
+        else:
+            sel_df['valorTotalLicenca'] = pd.to_numeric(sel_df['valorTotalLicenca'], errors='coerce').fillna(0)
 
-        # sum total per Centro de Custo across selected rows
-        centro_sum = sel_df.groupby('Centro de Custo')['valorTotalLicenca'].sum().to_dict()
-
-        # For each selected user row, allocate its valorTotalLicenca across centros proportionally to centro_sum
-        # The user's share for a centro = (user.valorTotalLicenca / total_selected_valor) * centro_sum[centro]
+        # sum total of all selected users
         total_selected_valor = sel_df['valorTotalLicenca'].sum()
-        # If total_selected_valor is 0, percent will be 0
 
-        # Build CSV
+        # Build CSV: one row per user (no duplication)
         si = StringIO()
         writer = csv.writer(si)
         writer.writerow(['Empresa','Colaborador','Email','Licenca','Centro de Custo','Valor por Centro de Custo','% por Centro de Custo'])
@@ -270,26 +266,21 @@ def api_export_selected():
             colaborador = row.get('Colaborador','') if 'Colaborador' in row else row.get('colaborador','')
             email = row.get(email_col,'')
             licenca = row.get('licenca','')
+            centro = row.get('Centro de Custo','')
             user_val = float(row.get('valorTotalLicenca') or 0)
 
-            # allocate across centros; if total_selected_valor == 0 then percent 0 and allocated 0
-            for centro, centro_total in centro_sum.items():
-                if total_selected_valor and centro_total:
-                    allocated = (user_val / total_selected_valor) * centro_total
-                    pct = (allocated / centro_total) * 100 if centro_total else 0
-                else:
-                    allocated = 0.0
-                    pct = 0.0
+            # calculate percentage: (user value / total selected) * 100
+            pct = (user_val / total_selected_valor * 100) if total_selected_valor else 0.0
 
-                writer.writerow([
-                    empresa,
-                    colaborador,
-                    email,
-                    licenca,
-                    centro,
-                    f"{allocated:.2f}",
-                    f"{pct:.2f}"
-                ])
+            writer.writerow([
+                empresa,
+                colaborador,
+                email,
+                licenca,
+                centro,
+                f"{user_val:.2f}",
+                f"{pct:.2f}"
+            ])
 
         output = si.getvalue()
         return Response(output, mimetype='text/csv', headers={'X-Filename':'export_selected.csv'})
@@ -606,6 +597,15 @@ def gerar_tabela_contratos(df):
             return null;
         }
 
+        function updateExportButton(){
+            const any = Array.from(document.querySelectorAll('.user-select-checkbox')).some(x=>x.checked);
+            if(exportBtn) exportBtn.disabled = !any;
+            // sync select-all checkbox
+            const allCheckboxes = Array.from(document.querySelectorAll('.user-select-checkbox'));
+            const selAll = document.getElementById('allusers-select-all');
+            if(selAll) selAll.checked = allCheckboxes.length>0 && allCheckboxes.every(x=>x.checked);
+        }
+
         function renderRows(arr){
             if(!Array.isArray(arr)) arr = [];
             if(arr.length===0){
@@ -679,32 +679,28 @@ def gerar_tabela_contratos(df):
                 allUsers = users;
                 loadingEl.style.display = 'none';
                 applySearchAndRender();
-                // attach change handlers to checkboxes after render
-                setTimeout(()=>{
-                    const allCheckboxes = Array.from(document.querySelectorAll('.user-select-checkbox'));
-                    allCheckboxes.forEach(cb=>{
-                        cb.addEventListener('change', ()=>{
-                            const any = allCheckboxes.some(x=>x.checked);
-                            if(exportBtn) exportBtn.disabled = !any;
-                            // sync select-all checkbox
-                            const selAll = document.getElementById('allusers-select-all');
-                            if(selAll) selAll.checked = allCheckboxes.length>0 && allCheckboxes.every(x=>x.checked);
-                        });
-                    });
-
-                    // select-all behavior
-                    const selAll = document.getElementById('allusers-select-all');
-                    if(selAll){
-                        selAll.addEventListener('change', function(){
-                            const on = !!this.checked;
-                            document.querySelectorAll('.user-select-checkbox').forEach(x=>{ x.checked = on; });
-                            if(exportBtn) exportBtn.disabled = !on;
-                        });
-                    }
-                }, 50);
             }).catch(err=>{
                 console.error('Erro fetching all users inline:', err);
                 loadingEl.innerHTML = `<div class="text-danger p-3">Erro ao carregar usuários: ${err.message}</div>`;
+            });
+        }
+
+        // Event delegation: attach handlers once to container (not to individual checkboxes)
+        if(container){
+            container.addEventListener('change', function(e){
+                if(e.target && e.target.classList.contains('user-select-checkbox')){
+                    updateExportButton();
+                }
+            });
+        }
+
+        // select-all behavior (attach once)
+        const selAll = document.getElementById('allusers-select-all');
+        if(selAll){
+            selAll.addEventListener('change', function(){
+                const on = !!this.checked;
+                document.querySelectorAll('.user-select-checkbox').forEach(x=>{ x.checked = on; });
+                if(exportBtn) exportBtn.disabled = !on;
             });
         }
 
