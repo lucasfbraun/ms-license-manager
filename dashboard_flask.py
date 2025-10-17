@@ -8,6 +8,8 @@ import json
 from datetime import datetime
 from urllib.parse import quote
 import re
+from io import StringIO
+import csv
 
 app = Flask(__name__)
 
@@ -214,6 +216,86 @@ def create_graphs(filters=None):
     graphs['contratos'] = contratos_html
     
     return kpis, graphs
+
+
+@app.route('/api/export_selected', methods=['POST'])
+def api_export_selected():
+    try:
+        payload = request.get_json(force=True)
+        emails = payload.get('emails') if payload else None
+        if not emails or not isinstance(emails, list):
+            return jsonify({'error':'emails list required'}), 400
+
+        df = load_data()
+        # normalize email column name variations
+        email_col = None
+        for c in df.columns:
+            if c.lower() in ('email','e-mail'):
+                email_col = c
+                break
+        if email_col is None:
+            return jsonify({'error':'Email column not found in data'}), 500
+
+        # filter rows where email in selected emails
+        sel_df = df[df[email_col].isin(emails)].copy()
+
+        if sel_df.empty:
+            # return empty CSV
+            si = StringIO()
+            writer = csv.writer(si)
+            writer.writerow(['Empresa','Colaborador','Email','Licenca','Centro de Custo','Valor por Centro de Custo','% por Centro de Custo'])
+            output = si.getvalue()
+            return Response(output, mimetype='text/csv', headers={'X-Filename':'export_selected.csv'})
+
+        # compute per-centro totals among selected rows
+        # assume valorTotalLicenca (numeric) is the amount per row to be allocated
+        if 'valorTotalLicenca' not in sel_df.columns:
+            sel_df['valorTotalLicenca'] = pd.to_numeric(sel_df.get('valorTotalLicenca', pd.Series([0]*len(sel_df))), errors='coerce').fillna(0)
+
+        # sum total per Centro de Custo across selected rows
+        centro_sum = sel_df.groupby('Centro de Custo')['valorTotalLicenca'].sum().to_dict()
+
+        # For each selected user row, allocate its valorTotalLicenca across centros proportionally to centro_sum
+        # The user's share for a centro = (user.valorTotalLicenca / total_selected_valor) * centro_sum[centro]
+        total_selected_valor = sel_df['valorTotalLicenca'].sum()
+        # If total_selected_valor is 0, percent will be 0
+
+        # Build CSV
+        si = StringIO()
+        writer = csv.writer(si)
+        writer.writerow(['Empresa','Colaborador','Email','Licenca','Centro de Custo','Valor por Centro de Custo','% por Centro de Custo'])
+
+        for idx, row in sel_df.iterrows():
+            empresa = row.get('empresa','')
+            colaborador = row.get('Colaborador','') if 'Colaborador' in row else row.get('colaborador','')
+            email = row.get(email_col,'')
+            licenca = row.get('licenca','')
+            user_val = float(row.get('valorTotalLicenca') or 0)
+
+            # allocate across centros; if total_selected_valor == 0 then percent 0 and allocated 0
+            for centro, centro_total in centro_sum.items():
+                if total_selected_valor and centro_total:
+                    allocated = (user_val / total_selected_valor) * centro_total
+                    pct = (allocated / centro_total) * 100 if centro_total else 0
+                else:
+                    allocated = 0.0
+                    pct = 0.0
+
+                writer.writerow([
+                    empresa,
+                    colaborador,
+                    email,
+                    licenca,
+                    centro,
+                    f"{allocated:.2f}",
+                    f"{pct:.2f}"
+                ])
+
+        output = si.getvalue()
+        return Response(output, mimetype='text/csv', headers={'X-Filename':'export_selected.csv'})
+    except Exception as e:
+        app.logger.exception('Erro gerando CSV de export_selected')
+        return jsonify({'error': str(e)}), 500
 
 def gerar_tabela_contratos(df):
     """Gera tabela de contratos com alertas de vencimento"""
@@ -503,6 +585,7 @@ def gerar_tabela_contratos(df):
         const loadingEl = document.getElementById('allusers-loading');
         const input = document.getElementById('allusers-search');
         const refreshBtn = document.getElementById('allusers-refresh');
+        const exportBtn = document.getElementById('allusers-export');
 
         if(!container || !listEl || !loadingEl) return;
 
@@ -539,20 +622,21 @@ def gerar_tabela_contratos(df):
                 const fmtNumber = (n)=> Number(n||0).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2});
                 const totalNum = u['Total'] ?? u['total'] ?? 0;
                 const valorTotalStr = u['Valor Total'] || u['ValorTotal'] || (totalNum ? ('R$ ' + fmtNumber(totalNum)) : 'R$ 0,00');
-
+                // Surround each user with a checkbox for selection
                 return `
-                    <div class="user-card mb-2">
-                        <div class="row">
-                            <div class="col-md-8">
-                                <strong>${u['Colaborador'] || ''}</strong><br>
-                                <small class="text-muted">${u['Email'] || ''} • ${empresa} • ${centro}</small>
-                            </div>
-                            <div class="col-md-4 text-end">
-                                <p class="mb-1"><small class="text-muted">${createdFmt}</small></p>
-                                <p class="mb-1"><strong>Qtd:</strong> ${u['Quantidade'] ?? ''}</p>
-                                <p class="mb-1"><strong>Valor Unit:</strong> ${u['Valor Unitário']? 'R$ ' + Number(u['Valor Unitário']).toLocaleString('pt-BR', {minimumFractionDigits:2}): ''}</p>
-                                <p class="mb-0"><strong>Valor Total:</strong> ${valorTotalStr}</p>
-                            </div>
+                    <div class="user-card mb-2 p-2 border rounded d-flex align-items-center">
+                        <div style="width:36px; flex:0 0 36px;">
+                            <input type="checkbox" class="user-select-checkbox form-check-input" data-email="${(u['Email']||'').replace(/"/g,'')}">
+                        </div>
+                        <div style="flex:1;">
+                            <strong>${u['Colaborador'] || ''}</strong><br>
+                            <small class="text-muted">${u['Email'] || ''} • ${empresa} • ${centro}</small>
+                        </div>
+                        <div style="width:200px; text-align:right;">
+                            <p class="mb-1"><small class="text-muted">${createdFmt}</small></p>
+                            <p class="mb-1"><strong>Qtd:</strong> ${u['Quantidade'] ?? ''}</p>
+                            <p class="mb-1"><strong>Valor Unit:</strong> ${u['Valor Unitário']? 'R$ ' + Number(u['Valor Unitário']).toLocaleString('pt-BR', {minimumFractionDigits:2}): ''}</p>
+                            <p class="mb-0"><strong>Valor Total:</strong> ${valorTotalStr}</p>
                         </div>
                     </div>`;
             }).join('');
@@ -595,6 +679,29 @@ def gerar_tabela_contratos(df):
                 allUsers = users;
                 loadingEl.style.display = 'none';
                 applySearchAndRender();
+                // attach change handlers to checkboxes after render
+                setTimeout(()=>{
+                    const allCheckboxes = Array.from(document.querySelectorAll('.user-select-checkbox'));
+                    allCheckboxes.forEach(cb=>{
+                        cb.addEventListener('change', ()=>{
+                            const any = allCheckboxes.some(x=>x.checked);
+                            if(exportBtn) exportBtn.disabled = !any;
+                            // sync select-all checkbox
+                            const selAll = document.getElementById('allusers-select-all');
+                            if(selAll) selAll.checked = allCheckboxes.length>0 && allCheckboxes.every(x=>x.checked);
+                        });
+                    });
+
+                    // select-all behavior
+                    const selAll = document.getElementById('allusers-select-all');
+                    if(selAll){
+                        selAll.addEventListener('change', function(){
+                            const on = !!this.checked;
+                            document.querySelectorAll('.user-select-checkbox').forEach(x=>{ x.checked = on; });
+                            if(exportBtn) exportBtn.disabled = !on;
+                        });
+                    }
+                }, 50);
             }).catch(err=>{
                 console.error('Erro fetching all users inline:', err);
                 loadingEl.innerHTML = `<div class="text-danger p-3">Erro ao carregar usuários: ${err.message}</div>`;
@@ -603,6 +710,30 @@ def gerar_tabela_contratos(df):
 
         if(input) input.addEventListener('input', applySearchAndRender);
         if(refreshBtn) refreshBtn.addEventListener('click', fetchAndRender);
+        if(exportBtn) exportBtn.addEventListener('click', function(){
+            // collect selected users
+            const selected = Array.from(document.querySelectorAll('.user-select-checkbox')).filter(x=>x.checked).map(x=>x.getAttribute('data-email'));
+            if(selected.length===0){ alert('Selecione pelo menos um usuário para exportar.'); return; }
+
+            // prepare payload: send list of emails to server which will compute per-centro totals
+            fetch('/api/export_selected', {
+                method: 'POST',
+                headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({ emails: selected })
+            }).then(r=>{
+                if(!r.ok) throw new Error('HTTP ' + r.status);
+                return r.blob().then(b=>({ blob: b, filename: (r.headers.get('X-Filename')||'export_selected.csv') }));
+            }).then(data=>{
+                const url = URL.createObjectURL(data.blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = data.filename;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                URL.revokeObjectURL(url);
+            }).catch(err=>{ console.error('Erro export:', err); alert('Erro ao exportar: '+err.message); });
+        });
 
         // initial load
         fetchAndRender();
@@ -1255,7 +1386,11 @@ HTML_TEMPLATE = '''
                                 <input id="allusers-search" type="text" class="form-control form-control-sm" placeholder="Pesquisar usuário, email, empresa, centro de custo...">
                             </div>
                             <div class="col-md-6 text-end">
-                                <button id="allusers-refresh" class="btn btn-sm btn-outline-primary">Atualizar</button>
+                                <div class="d-inline-flex align-items-center">
+                                    <input id="allusers-select-all" type="checkbox" class="form-check-input me-2" title="Selecionar todos">
+                                    <button id="allusers-refresh" class="btn btn-sm btn-outline-primary me-2">Atualizar</button>
+                                    <button id="allusers-export" class="btn btn-sm btn-success" disabled>📥 Exportar CSV</button>
+                                </div>
                             </div>
                         </div>
 
