@@ -6,6 +6,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import json
 from datetime import datetime
+import os
 from urllib.parse import quote
 import re
 from io import StringIO
@@ -31,10 +32,14 @@ app.json = SafeJSONProvider(app)
 
 # Caminho do arquivo Excel utilizado pelo dashboard
 EXCEL_FILE = 'LICENCIAMENTO MICROSOFT (1).xlsx'
+# Se existir, prefira o arquivo atualizado gerado pelo script
+UPDATED_EXCEL_FILE = 'LICENCIAMENTO_MICROSOFT_updated.xlsx'
 
 def load_data():
     """Carrega e processa os dados da planilha"""
-    df = pd.read_excel(EXCEL_FILE, sheet_name='Planilha1')
+    # prefira o arquivo atualizado quando presente
+    use_file = UPDATED_EXCEL_FILE if os.path.exists(UPDATED_EXCEL_FILE) else EXCEL_FILE
+    df = pd.read_excel(use_file, sheet_name='Planilha1')
     
     # Limpeza e conversão de dados
     df['valorAnual'] = pd.to_numeric(df['valorAnual'], errors='coerce')
@@ -240,10 +245,10 @@ def api_export_selected():
         sel_df = df[df[email_col].isin(emails)].copy()
 
         if sel_df.empty:
-            # return empty CSV
+            # return empty CSV with headers including Nome Centro de Custo
             si = StringIO()
             writer = csv.writer(si)
-            writer.writerow(['Empresa','Colaborador','Email','Licenca','Centro de Custo','Valor por Centro de Custo','% por Centro de Custo'])
+            writer.writerow(['Empresa','Colaborador','Email','Licenca','Centro de Custo','Nome Centro de Custo','Valor por Centro de Custo','% por Centro de Custo'])
             output = si.getvalue()
             return Response(output, mimetype='text/csv', headers={'X-Filename':'export_selected.csv'})
 
@@ -259,14 +264,21 @@ def api_export_selected():
         # Build CSV: one row per user (no duplication)
         si = StringIO()
         writer = csv.writer(si)
-        writer.writerow(['Empresa','Colaborador','Email','Licenca','Centro de Custo','Valor por Centro de Custo','% por Centro de Custo'])
+        writer.writerow(['Empresa','Colaborador','Email','Licenca','Centro de Custo','Nome Centro de Custo','Valor por Centro de Custo','% por Centro de Custo'])
 
         for idx, row in sel_df.iterrows():
             empresa = row.get('empresa','')
             colaborador = row.get('Colaborador','') if 'Colaborador' in row else row.get('colaborador','')
             email = row.get(email_col,'')
             licenca = row.get('licenca','')
-            centro = row.get('Centro de Custo','')
+            centro = str(row.get('Centro de Custo','') or '')
+            nome_centro = str(row.get('Nome Centro de Custo','') or '')
+
+            # fallback: se Nome Centro de Custo estiver vazio, tente dividir pelo primeiro '-'
+            if (not nome_centro) and centro and '-' in centro:
+                parts = centro.split('-', 1)
+                centro = parts[0].strip()
+                nome_centro = parts[1].strip()
             user_val = float(row.get('valorTotalLicenca') or 0)
 
             # calculate percentage: (user value / total selected) * 100
@@ -278,6 +290,7 @@ def api_export_selected():
                 email,
                 licenca,
                 centro,
+                nome_centro,
                 f"{user_val:.2f}",
                 f"{pct:.2f}"
             ])
@@ -2267,16 +2280,37 @@ def api_rateio_contratos():
     if dados.empty:
         return jsonify({'error': 'Nenhum dado encontrado para os contratos selecionados.'}), 404
 
-    # Agrupar por Centro de Custo
+    # Preparar e separar a coluna 'Centro de Custo' em código e nome, depois agrupar
     dados['qtdLicenca'] = pd.to_numeric(dados['qtdLicenca'], errors='coerce').fillna(0)
     dados['valorTotalLicenca'] = pd.to_numeric(dados['valorTotalLicenca'], errors='coerce').fillna(0)
-    grp = dados.groupby('Centro de Custo', dropna=False).agg({
+
+    # Normalizar o campo e evitar 'nan' string
+    dados['__centro_raw'] = dados['Centro de Custo'].astype(str).replace('nan', '').fillna('').str.strip()
+
+    def split_centro(val):
+        if not val or pd.isna(val):
+            return ('', '')
+        s = str(val)
+        if '-' in s:
+            parts = s.split('-', 1)
+            return (parts[0].strip(), parts[1].strip())
+        return (s.strip(), '')
+
+    centros = dados['__centro_raw'].apply(lambda x: pd.Series(split_centro(x)))
+    centros.columns = ['centro_codigo', 'centro_nome']
+    dados = pd.concat([dados, centros], axis=1)
+
+    # Para agrupar, use o código quando disponível; caso contrário use o raw
+    dados['centro_agrupar'] = dados['centro_codigo'].where(dados['centro_codigo'] != '', dados['__centro_raw'])
+
+    grp = dados.groupby(['centro_agrupar', 'centro_nome'], dropna=False).agg({
         'qtdLicenca': 'sum',
         'valorTotalLicenca': 'sum'
     }).reset_index().rename(columns={
-        'Centro de Custo': 'centro_custo',
+        'centro_agrupar': 'centro_custo',
         'qtdLicenca': 'qtd_cc',
-        'valorTotalLicenca': 'valor_cc'
+        'valorTotalLicenca': 'valor_cc',
+        'centro_nome': 'nome_centro'
     })
 
     valor_total = grp['valor_cc'].sum()
@@ -2310,7 +2344,8 @@ def api_rateio_contratos():
     out_fmt['valor por centro de custo'] = out_fmt['valor por centro de custo'].apply(fmt_val)
     out_fmt['% por centro de custo'] = out_fmt['% por centro de custo'].apply(lambda x: f"{float(x):.2f}".replace('.', ',') if pd.notna(x) else '')
 
-    columns = ['empresa', 'licenca', 'qtd (por centro de custo)', 'centro_custo', 'valor por centro de custo', '% por centro de custo']
+    # Incluir coluna separada para Nome do Centro de Custo
+    columns = ['empresa', 'licenca', 'qtd (por centro de custo)', 'centro_custo', 'nome_centro', 'valor por centro de custo', '% por centro de custo']
     csv_lines = [';'.join(columns)]
     for _, row in out_fmt.iterrows():
         vals = [
@@ -2318,10 +2353,12 @@ def api_rateio_contratos():
             str(row.get('licenca', '')),
             str(int(row.get('qtd (por centro de custo)', 0))) if pd.notna(row.get('qtd (por centro de custo)')) else '0',
             str(row.get('centro_custo', '')),
+            str(row.get('nome_centro', '')),
             str(row.get('valor por centro de custo', '')),
             str(row.get('% por centro de custo', ''))
         ]
-        csv_lines.append(';'.join(vals))
+        # garantir que não há quebras de linha nos valores
+        csv_lines.append(';'.join([v.replace('\n',' ').replace('\r',' ') for v in vals]))
 
     csv_data = '\n'.join(csv_lines)
     file_name = 'rateio_consolidado.csv'
