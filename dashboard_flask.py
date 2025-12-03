@@ -2300,13 +2300,6 @@ def api_rateio_contratos():
     centros.columns = ['centro_codigo', 'centro_nome']
     dados = pd.concat([dados, centros], axis=1)
 
-    # Se o arquivo já contém uma coluna de nome de centro (ex: 'Nome Centro de Custo'), prefira-a
-    nome_col_existing = next((c for c in dados.columns if 'nome' in c.lower() and 'centro' in c.lower()), None)
-    if nome_col_existing:
-        dados['__nome_from_col'] = dados[nome_col_existing].astype(str).replace('nan', '').fillna('').str.strip()
-        # preencher centro_nome quando estiver vazio com o valor da coluna existente
-        dados['centro_nome'] = dados['centro_nome'].where(dados['centro_nome'] != '', dados['__nome_from_col'])
-
     # Para agrupar, use o código quando disponível; caso contrário use o raw
     dados['centro_agrupar'] = dados['centro_codigo'].where(dados['centro_codigo'] != '', dados['__centro_raw'])
 
@@ -2319,19 +2312,6 @@ def api_rateio_contratos():
         'valorTotalLicenca': 'valor_cc',
         'centro_nome': 'nome_centro'
     })
-
-    # Garantir que 'nome_centro' esteja preenchido quando houver mapeamento disponível
-    if '__nome_from_col' in dados.columns:
-        # construir mapa centro -> nome baseado nas linhas onde nome está preenchido
-        mapa = dict(dados.loc[dados['__nome_from_col'].astype(str).str.strip()!='', ['centro_agrupar','__nome_from_col']].drop_duplicates().values)
-        if mapa:
-            # aplicar mapeamento nas linhas do agrupamento que estejam vazias
-            def fix_nome(row):
-                nome = row.get('nome_centro')
-                if nome is None or str(nome).strip()=='':
-                    return mapa.get(row.get('centro_custo'), '')
-                return nome
-            grp['nome_centro'] = grp.apply(fix_nome, axis=1)
 
     valor_total = grp['valor_cc'].sum()
     grp['perc_cc'] = grp['valor_cc'].apply(lambda v: (float(v) / float(valor_total) * 100) if valor_total not in [0, None] else 0.0)

@@ -7,8 +7,6 @@ services:
     volumes:
       # Mapear a planilha para poder atualizar sem rebuild
       - ./LICENCIAMENTO MICROSOFT (1).xlsx:/app/LICENCIAMENTO MICROSOFT (1).xlsx
-      # Montar o arquivo atualizado (se presente) para que a aplicação o prefira
-      - ./LICENCIAMENTO_MICROSOFT_updated.xlsx:/app/LICENCIAMENTO_MICROSOFT_updated.xlsx:ro
     environment:
       - FLASK_ENV=production
       - PYTHONUNBUFFERED=1
